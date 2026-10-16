@@ -1,0 +1,714 @@
+{% extends 'base.html' %}
+{% block title %}{{ APP_MONITOR_TITLE }} | Live Network Threat Detection{% endblock %}
+
+{% block head %}
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js"></script>
+  <script src="https://cdn.socket.io/4.5.0/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/fontawesome.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/templatemo-host-cloud.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/owl.css') }}">
+
+  <style>
+    body { color: #1a1a1a; }
+    
+    /* Dashboard Cards */
+    .dashboard-card {
+      background: #fff; padding: 25px; border-radius: 8px;
+      box-shadow: 0 0 15px rgba(0,0,0,0.1); margin-bottom: 30px; height: 100%;
+      border: 1px solid #eaeaea;
+    }
+    .card-header-custom {
+      display: flex; align-items: center; border-bottom: 2px solid #f1f1f1;
+      padding-bottom: 15px; margin-bottom: 15px;
+    }
+    .card-icon {
+      width: 40px; height: 40px; background: linear-gradient(135deg, #4facfe, #00f2fe);
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      color: #fff; margin-right: 15px;
+    }
+    .card-title h4 { margin: 0; font-size: 18px; font-weight: 700; color: #1e1e1e; }
+    
+    /* Map & Chart */
+    #map { height: 350px; width: 100%; border-radius: 8px; z-index: 1; background: #eee; }
+    .chart-container { position: relative; height: 250px; width: 100%; }
+
+    /* Log Table */
+    .log-wrapper { height: 300px; overflow-y: auto; border: 1px solid #eee; border-radius: 5px; }
+    #flow_logs { font-size: 13px; }
+    #flow_logs td { padding: 10px; border-bottom: 1px solid #eee; vertical-align: middle; }
+    .row-danger { background-color: #fff0f0; color: #d63031; font-weight: bold; }
+    .row-benign { color: #2d3436; }
+    
+    /* Controls */
+    .btn-action {
+        background: linear-gradient(to right, #4facfe, #00f2fe); border: none; color: #fff;
+        width: 100%; padding: 10px; border-radius: 25px; font-weight: 700; margin-top: 10px;
+        cursor: pointer; transition: 0.3s;
+    }
+    .btn-action:hover { transform: translateY(-2px); opacity: 0.9; }
+    
+    .form-range { width: 100%; cursor: pointer; }
+    .control-group { margin-bottom: 15px; }
+    .control-label { display: flex; justify-content: space-between; font-weight: 700; font-size: 13px; }
+    
+    /* Stats */
+    .stat-value { font-size: 32px; font-weight: 800; margin-bottom: 5px; line-height: 1; }
+    .stat-label { font-size: 12px; text-transform: uppercase; font-weight: 700; color: #888; }
+    
+    /* Header Shadow */
+    .page-heading h1 { text-shadow: 0 3px 10px rgba(0,0,0,0.5); }
+  </style>
+{% endblock %}
+
+{% block content %}
+
+  <div class="page-heading header-text" style="padding: 120px 0 60px;">
+    <div class="container">
+      <div class="row">
+        <div class="col-md-12">
+          <h1>{{ APP_MONITOR_TITLE }}</h1>
+          <p><a href="/">Home</a> / <span>{{ APP_DASHBOARD_TITLE }}</span></p>
+          <div class="mt-3">
+             <span class="badge" style="background: rgba(0,0,0,0.7); padding: 10px 25px; border-radius: 30px; border: 1px solid #fff;">
+                Status: <strong style="color: {% if status == 'ON' %}#00ff00{% else %}#ff4444{% endif %}">{{ status }}</strong>
+             </span>
+             {% if status != 'ON' %}
+             <div class="mt-2 text-warning" style="background: rgba(0,0,0,0.6); padding: 5px 15px; border-radius: 5px; display: inline-block;">
+               ⚠️ System OFF. Go to Admin to enable.
+             </div>
+             {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="services section" style="background: #f4f7f6; padding-top: 40px;">
+    <div class="container">
+      
+      <div class="row">
+        <div class="col-lg-8">
+            <div class="dashboard-card">
+                <div class="card-header-custom">
+                    <div class="card-icon"><i class="fa fa-globe"></i></div>
+                    <div class="card-title"><h4>Network Threat Map</h4></div>
+                </div>
+                <div id="map"></div>
+            </div>
+        </div>
+        <div class="col-lg-4">
+            <div class="dashboard-card">
+                <div class="card-header-custom">
+                    <div class="card-icon"><i class="fa fa-sliders-h"></i></div>
+                    <div class="card-title"><h4>Settings</h4></div>
+                </div>
+                
+                <div class="control-group">
+                    <label class="control-label">Sim Speed <span id="speedVal">{{ simulation_speed|default(1)|int }}x</span></label>
+                    <input type="range" class="form-range" id="replaySpeed" min="1" max="50" value="{{ simulation_speed|default(1)|int }}">
+                    <button id="startReplay" class="btn-action" style="{% if simulation_running %}background: #dc3545;{% endif %}">
+                        {% if simulation_running %}<i class="fa fa-stop"></i> Stop Simulation{% else %}<i class="fa fa-play"></i> Start Simulation{% endif %}
+                    </button>
+                </div>
+                <hr>
+                <div class="control-group">
+                    <label class="control-label">Alpha <span id="alphaVal">{{ detector_info.alpha if detector_info else 0.6 }}</span></label>
+                    <input type="range" class="form-range" id="alpha" min="0" max="1" step="0.05" value="{{ detector_info.alpha if detector_info else 0.6 }}">
+                </div>
+                <div class="control-group">
+                    <label class="control-label">Beta <span id="betaVal">{{ detector_info.beta if detector_info else 0.4 }}</span></label>
+                    <input type="range" class="form-range" id="beta" min="0" max="1" step="0.05" value="{{ detector_info.beta if detector_info else 0.4 }}">
+                </div>
+                <div class="control-group">
+                    <label class="control-label">Threshold <span id="threshVal">{{ detector_info.thresh if detector_info else 0.5 }}</span></label>
+                    <input type="range" class="form-range" id="thresh" min="0" max="1" step="0.01" value="{{ detector_info.thresh if detector_info else 0.5 }}">
+                </div>
+                <button id="applyParams" class="btn-action" style="background: #333;"><i class="fa fa-check"></i> Apply Settings</button>
+                <div id="settingsToast" class="mt-2 text-center" style="display:none; font-size:12px; font-weight:700; color:#28a745; padding: 6px; background: rgba(40,167,69,0.1); border-radius: 6px; border: 1px solid rgba(40,167,69,0.3);"></div>
+            </div>
+
+            <!-- User Threat Alert Subscription Card -->
+            <div class="dashboard-card mt-4">
+                <div class="card-header-custom">
+                    <div class="card-icon" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);"><i class="fa fa-envelope"></i></div>
+                    <div class="card-title"><h4>AI-NIDS Security Alerts</h4></div>
+                </div>
+                <p style="font-size: 13px; color: #555; margin-bottom: 12px; line-height: 1.5;">
+                    Enter your email to receive real-time incident reports from AI-NIDS whenever a network intrusion or attack is detected.
+                </p>
+                
+                <div class="mb-2">
+                    <input type="email" id="subscriberEmailInput" class="form-control" placeholder="user@example.com" style="border-radius: 6px; font-size: 13px; padding: 10px; border: 1px solid #ccc; width: 100%;">
+                </div>
+
+                <div class="d-flex gap-2 mb-2" style="display: flex; gap: 8px;">
+                    <button id="btnSubscribeEmail" class="btn-action" style="flex: 1; padding: 10px; font-size: 13px; margin: 0; background: linear-gradient(to right, #4facfe, #00f2fe);">
+                        <i class="fa fa-bell"></i> Subscribe
+                    </button>
+                    <button id="btnTestUserEmail" class="btn-action" style="padding: 10px 14px; font-size: 13px; margin: 0; background: #6c757d;" title="Test sending an alert to this email">
+                        <i class="fa fa-paper-plane"></i> Test
+                    </button>
+                </div>
+
+                <div id="subscriberStatusMsg" style="display: none; font-size: 12px; font-weight: 600; padding: 8px 10px; border-radius: 6px; margin-top: 8px; line-height: 1.4;"></div>
+
+                <div class="mt-3 pt-2" style="border-top: 1px dashed #ddd;">
+                    <div class="d-flex justify-content-between align-items-center mb-1" style="display: flex; justify-content: space-between; align-items: center;">
+                        <span style="font-size: 11px; font-weight: 700; color: #666; text-transform: uppercase;">Active Alert Recipients</span>
+                        <span id="subscriberCountBadge" class="badge" style="background: #4facfe; color: white; font-size: 10px; padding: 2px 6px; border-radius: 10px;">0</span>
+                    </div>
+                    <div id="subscribersBadgeList" style="display: flex; flex-direction: column; gap: 4px; max-height: 120px; overflow-y: auto;">
+                        <small class="text-muted" style="font-size: 11px;">Loading recipients...</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="col-lg-6">
+            <div class="dashboard-card">
+                <div class="card-header-custom">
+                    <div class="card-icon"><i class="fa fa-list"></i></div>
+                    <div class="card-title"><h4>Live Flow Telemetry</h4></div>
+                </div>
+                <div class="log-wrapper">
+                    <table class="table table-striped mb-0">
+                        <thead>
+                            <tr style="background: #eee; font-size: 12px;">
+                                <th>Time</th><th>Source IP</th><th>Score</th><th>Result</th>
+                            </tr>
+                        </thead>
+                        <tbody id="flow_logs">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="dashboard-card">
+                <div class="card-header-custom">
+                    <div class="card-icon"><i class="fa fa-chart-area"></i></div>
+                    <div class="card-title"><h4>Network Traffic Intensity</h4></div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="trafficChart"></canvas>
+                </div>
+            </div>
+        </div>
+      </div>
+
+      <div class="row mb-3">
+        <div class="col-lg-6">
+            <div class="dashboard-card d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="stat-value" id="totalPackets">{{ initial_stats.session_packets if (initial_stats and initial_stats.session_packets > 0) else (initial_stats.total_packets if initial_stats else 0) }}</div>
+                    <div class="stat-label">Packets Scanned</div>
+                </div>
+                <i class="fa fa-network-wired fa-2x" style="color: #4facfe;"></i>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="dashboard-card d-flex justify-content-between align-items-center" style="border-bottom: 4px solid #ff4d4d;">
+                <div>
+                    <div class="stat-value" style="color: #ff4d4d;" id="totalAttacks">{{ initial_stats.session_attacks if (initial_stats and initial_stats.session_packets > 0) else (initial_stats.total_attacks if initial_stats else 0) }}</div>
+                    <div class="stat-label">Threats Blocked</div>
+                </div>
+                <i class="fa fa-shield-virus fa-2x" style="color: #ff4d4d;"></i>
+            </div>
+        </div>
+      </div>
+      <div class="d-flex justify-content-end mb-4">
+          <button id="btnResetCounters" class="btn btn-sm btn-outline-secondary" style="font-size: 12px; border-radius: 20px; padding: 6px 16px;">
+              <i class="fa fa-arrows-rotate"></i> Reset Live Counter
+          </button>
+      </div>
+
+    </div>
+  </div>
+
+{% endblock %}
+
+{% block scripts %}
+  <script src="{{ url_for('static', filename='js/owl.js') }}"></script>
+  <script src="{{ url_for('static', filename='js/accordions.js') }}"></script>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const socket = io();
+        const serverStats = {{ initial_stats|tojson if initial_stats else '{}' }};
+        
+        // --- 1. Initialize Map ---
+        const map = L.map('map').setView([20, 0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+        
+        const markers = L.layerGroup().addTo(map);
+
+        // Load & Restore Past Map Markers across page navigation
+        let mapMarkersHistory = [];
+        try {
+            const stored = sessionStorage.getItem('live_map_markers');
+            if (stored) mapMarkersHistory = JSON.parse(stored);
+        } catch(e) {}
+
+        if (mapMarkersHistory.length === 0 && serverStats.recent_geo && serverStats.recent_geo.length > 0) {
+            mapMarkersHistory = serverStats.recent_geo;
+        }
+
+        mapMarkersHistory.forEach(pt => {
+            if (pt && pt.lat !== undefined && pt.lon !== undefined) {
+                L.circleMarker([pt.lat, pt.lon], {
+                    radius: 6,
+                    fillColor: pt.isAttack ? "#ff4d4d" : "#4facfe",
+                    color: "#fff",
+                    weight: 1,
+                    fillOpacity: 0.8
+                }).addTo(markers);
+            }
+        });
+
+        // --- 2. Initialize Chart ---
+        const HISTORY_POINTS = 100;
+        const ctx = document.getElementById('trafficChart').getContext('2d');
+        const trafficChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: Array(HISTORY_POINTS).fill(''),
+                datasets: [{
+                    label: 'Attacks/Sec',
+                    data: Array(HISTORY_POINTS).fill(0),
+                    borderColor: '#ff4d4d',
+                    backgroundColor: 'rgba(255, 77, 77, 0.2)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4,
+                    pointRadius: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                scales: {
+                    y: { beginAtZero: true, max: 10 },
+                    x: { display: false }
+                }
+            }
+        });
+
+        // --- 3. State Variables (Resilient against navigation / page changes) ---
+        const savedPackets = sessionStorage.getItem('live_total_packets');
+        const savedAttacks = sessionStorage.getItem('live_total_attacks');
+
+        let totalPackets = (serverStats.session_packets && serverStats.session_packets > 0)
+            ? serverStats.session_packets
+            : (savedPackets !== null ? Number(savedPackets) : (serverStats.total_packets || 0));
+
+        let totalAttacks = (serverStats.session_packets && serverStats.session_packets > 0)
+            ? (serverStats.session_attacks || 0)
+            : (savedAttacks !== null ? Number(savedAttacks) : (serverStats.total_attacks || 0));
+
+        document.getElementById('totalPackets').innerText = totalPackets.toLocaleString();
+        document.getElementById('totalAttacks').innerText = totalAttacks.toLocaleString();
+
+        let attackCounts = [];
+
+        // Pre-populate recent log rows so table is never blank on page navigation
+        const tableBody = document.getElementById('flow_logs');
+        if (serverStats.recent_logs && serverStats.recent_logs.length > 0) {
+            tableBody.innerHTML = '';
+            serverStats.recent_logs.forEach(log => {
+                const row = document.createElement('tr');
+                const isAttack = log.label === 1;
+                if(isAttack) row.classList.add('row-danger');
+                else row.classList.add('row-benign');
+                
+                const timeStr = new Date(log.ts * 1000).toLocaleTimeString();
+                const statusText = isAttack ? (log.reason || "ATTACK") : "Normal";
+
+                row.innerHTML = `
+                    <td>${timeStr}</td>
+                    <td>${log.src_ip}</td>
+                    <td>${(log.attack_score || 0).toFixed(2)}</td>
+                    <td>${statusText}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        // Restore saved slider values from sessionStorage if present
+        const savedAlpha = sessionStorage.getItem('detector_alpha');
+        const savedBeta = sessionStorage.getItem('detector_beta');
+        const savedThresh = sessionStorage.getItem('detector_thresh');
+        if (savedAlpha !== null) {
+            document.getElementById('alpha').value = savedAlpha;
+            document.getElementById('alphaVal').innerText = savedAlpha;
+        }
+        if (savedBeta !== null) {
+            document.getElementById('beta').value = savedBeta;
+            document.getElementById('betaVal').innerText = savedBeta;
+        }
+        if (savedThresh !== null) {
+            document.getElementById('thresh').value = savedThresh;
+            document.getElementById('threshVal').innerText = savedThresh;
+        }
+
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('settingsToast');
+            if (!toast) return;
+            toast.innerText = msg;
+            toast.style.display = 'block';
+            toast.style.color = isError ? '#dc3545' : '#28a745';
+            toast.style.background = isError ? 'rgba(220,53,69,0.1)' : 'rgba(40,167,69,0.1)';
+            toast.style.borderColor = isError ? 'rgba(220,53,69,0.3)' : 'rgba(40,167,69,0.3)';
+            setTimeout(() => { toast.style.display = 'none'; }, 4000);
+        }
+
+        // --- 4. Handle Data Flow ---
+        socket.on('flow_result', (data) => {
+            // Keep in sync with server session count if provided, otherwise increment
+            if (typeof data.session_packets === 'number') {
+                totalPackets = data.session_packets;
+                totalAttacks = data.session_attacks;
+            } else {
+                totalPackets++;
+                if (data.label === 1) totalAttacks++;
+            }
+
+            // Persist across navigation
+            sessionStorage.setItem('live_total_packets', totalPackets);
+            sessionStorage.setItem('live_total_attacks', totalAttacks);
+
+            document.getElementById('totalPackets').innerText = totalPackets.toLocaleString();
+            document.getElementById('totalAttacks').innerText = totalAttacks.toLocaleString();
+
+            const isAttack = data.label === 1;
+
+            // Update Table
+            const row = document.createElement('tr');
+            if(isAttack) row.classList.add('row-danger');
+            else row.classList.add('row-benign');
+            
+            const timeStr = new Date(data.ts * 1000).toLocaleTimeString();
+            const statusText = isAttack ? (data.reason || "ATTACK") : "Normal";
+
+            row.innerHTML = `
+                <td>${timeStr}</td>
+                <td>${data.src_ip}</td>
+                <td>${(data.attack_score || 0).toFixed(2)}</td>
+                <td>${statusText}</td>
+            `;
+            
+            tableBody.prepend(row);
+            if(tableBody.children.length > 50) tableBody.lastChild.remove();
+
+            // Update Map & Persist Marker
+            if (data.geo && data.geo.lat !== undefined && data.geo.lon !== undefined) {
+                L.circleMarker([data.geo.lat, data.geo.lon], {
+                    radius: 6,
+                    fillColor: isAttack ? "#ff4d4d" : "#4facfe",
+                    color: "#fff",
+                    weight: 1,
+                    fillOpacity: 0.8
+                }).addTo(markers);
+
+                mapMarkersHistory.push({
+                    lat: data.geo.lat,
+                    lon: data.geo.lon,
+                    isAttack: isAttack
+                });
+                if (mapMarkersHistory.length > 150) mapMarkersHistory.shift();
+                try {
+                    sessionStorage.setItem('live_map_markers', JSON.stringify(mapMarkersHistory));
+                } catch(e) {}
+            }
+
+            // Update Chart Data
+            attackCounts.push(isAttack ? 1 : 0);
+            
+            if(attackCounts.length > 5) {
+                const sum = attackCounts.reduce((a,b)=>a+b,0);
+                trafficChart.data.datasets[0].data.push(sum);
+                trafficChart.data.datasets[0].data.shift();
+                trafficChart.update();
+                attackCounts = []; 
+            }
+        });
+
+        // Email Alert Notification Listener
+        socket.on('email_alert_sent', (info) => {
+            showToast(`📧 Alert email delivered to ${info.recipient} (IP: ${info.src_ip})`);
+        });
+
+        // Reset Counters Button
+        const resetBtn = document.getElementById('btnResetCounters');
+        if (resetBtn) {
+            resetBtn.addEventListener('click', () => {
+                if(confirm("Reset live monitor counters and map markers?")) {
+                    fetch('/api/reset_stats', { method: 'POST' })
+                        .then(() => {
+                            totalPackets = 0;
+                            totalAttacks = 0;
+                            mapMarkersHistory = [];
+                            sessionStorage.removeItem('live_total_packets');
+                            sessionStorage.removeItem('live_total_attacks');
+                            sessionStorage.removeItem('live_map_markers');
+                            markers.clearLayers();
+                            document.getElementById('totalPackets').innerText = '0';
+                            document.getElementById('totalAttacks').innerText = '0';
+                            showToast("Counters and map reset.");
+                        })
+                        .catch(e => console.error("Reset error:", e));
+                }
+            });
+        }
+
+        // --- 5. Settings Logic ---
+        ['replaySpeed', 'alpha', 'beta', 'thresh'].forEach(id => {
+            const el = document.getElementById(id);
+            if(el) {
+                el.addEventListener('input', function() {
+                    const suffix = id === 'replaySpeed' ? 'x' : '';
+                    document.getElementById(id + 'Val').innerText = this.value + suffix;
+                });
+            }
+        });
+
+        // Apply Detector Parameters
+        const applyBtn = document.getElementById('applyParams');
+        if (applyBtn) {
+            applyBtn.addEventListener('click', () => {
+                const alpha = parseFloat(document.getElementById('alpha').value);
+                const beta = parseFloat(document.getElementById('beta').value);
+                const thresh = parseFloat(document.getElementById('thresh').value);
+                applyBtn.disabled = true;
+
+                fetch('/api/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ alpha: alpha, beta: beta, thresh: thresh })
+                })
+                .then(r => r.json())
+                .then(res => {
+                    applyBtn.disabled = false;
+                    if (res.status === 'ok') {
+                        sessionStorage.setItem('detector_alpha', alpha);
+                        sessionStorage.setItem('detector_beta', beta);
+                        sessionStorage.setItem('detector_thresh', thresh);
+                        showToast(`Settings Saved: α=${alpha}, β=${beta}, Threshold=${thresh}`);
+                    } else {
+                        showToast("Failed to save settings.", true);
+                    }
+                })
+                .catch(err => {
+                    applyBtn.disabled = false;
+                    showToast("Error connecting to server.", true);
+                });
+            });
+        }
+
+        // Simulation Start / Stop Controls
+        let isSimRunning = Boolean({{ 'true' if simulation_running else 'false' }});
+        const startBtn = document.getElementById('startReplay');
+
+        function updateSimButtonState(running) {
+            isSimRunning = running;
+            if (running) {
+                startBtn.innerHTML = '<i class="fa fa-stop"></i> Stop Simulation';
+                startBtn.style.background = '#dc3545';
+            } else {
+                startBtn.innerHTML = '<i class="fa fa-play"></i> Start Simulation';
+                startBtn.style.background = 'linear-gradient(to right, #4facfe, #00f2fe)';
+            }
+        }
+
+        if (startBtn) {
+            updateSimButtonState(isSimRunning);
+
+            startBtn.addEventListener('click', () => {
+                const speed = document.getElementById('replaySpeed').value;
+                const action = isSimRunning ? 'stop' : 'start';
+                startBtn.disabled = true;
+
+                fetch('/api/simulation', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ action: action, speed: speed })
+                })
+                .then(r => r.json())
+                .then(res => {
+                    startBtn.disabled = false;
+                    if (res.status === 'started' || res.status === 'already_running') {
+                        updateSimButtonState(true);
+                        showToast(`Simulation started at ${speed}x speed!`);
+                    } else if (res.status === 'stopped') {
+                        updateSimButtonState(false);
+                        showToast("Simulation stopped.");
+                    }
+                })
+                .catch(err => {
+                    startBtn.disabled = false;
+                    showToast("Simulation control failed.", true);
+                });
+            });
+
+            document.getElementById('replaySpeed').addEventListener('change', function() {
+                if (isSimRunning) {
+                    fetch('/api/simulation', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ action: 'speed', speed: this.value })
+                    }).then(() => {
+                        showToast(`Simulation speed set to ${this.value}x`);
+                    });
+                }
+            });
+        }
+
+        // --- 6. User Threat Alert Subscription Logic ---
+        const subInput = document.getElementById('subscriberEmailInput');
+        const subBtn = document.getElementById('btnSubscribeEmail');
+        const subTestBtn = document.getElementById('btnTestUserEmail');
+        const subStatus = document.getElementById('subscriberStatusMsg');
+        const badgeList = document.getElementById('subscribersBadgeList');
+        const countBadge = document.getElementById('subscriberCountBadge');
+
+        function showSubMsg(msg, isError = false) {
+            if (!subStatus) return;
+            subStatus.style.display = 'block';
+            subStatus.innerText = msg;
+            subStatus.style.color = isError ? '#dc3545' : '#198754';
+            subStatus.style.background = isError ? 'rgba(220,53,69,0.1)' : 'rgba(25,135,84,0.1)';
+            subStatus.style.border = isError ? '1px solid rgba(220,53,69,0.3)' : '1px solid rgba(25,135,84,0.3)';
+            setTimeout(() => { if (subStatus) subStatus.style.display = 'none'; }, 6000);
+        }
+
+        function refreshSubscribers() {
+            if (!badgeList) return;
+            fetch('/api/subscribers')
+                .then(r => r.json())
+                .then(res => {
+                    if (res.status === 'ok') {
+                        const subs = res.subscribers || [];
+                        const admin = res.admin_email;
+                        badgeList.innerHTML = '';
+                        
+                        let totalCount = subs.length + (admin ? 1 : 0);
+                        if (countBadge) countBadge.innerText = totalCount;
+
+                        if (admin) {
+                            const adminItem = document.createElement('div');
+                            adminItem.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:#f8f9fa; border:1px solid #e2e8f0; border-radius:4px; padding:4px 8px; font-size:12px;';
+                            adminItem.innerHTML = `<span style="overflow:hidden; text-overflow:ellipsis; max-width:210px;"><i class="fa fa-shield-alt text-primary me-1"></i> ${admin}</span><span class="badge bg-secondary" style="font-size:9px;">Admin</span>`;
+                            badgeList.appendChild(adminItem);
+                        }
+
+                        if (subs.length === 0 && !admin) {
+                            badgeList.innerHTML = '<small class="text-muted" style="font-size:11px;">No alert recipients subscribed yet.</small>';
+                        } else {
+                            subs.forEach(email => {
+                                const item = document.createElement('div');
+                                item.style.cssText = 'display:flex; justify-content:space-between; align-items:center; background:#fff; border:1px solid #e2e8f0; border-radius:4px; padding:4px 8px; font-size:12px;';
+                                item.innerHTML = `
+                                    <span style="overflow:hidden; text-overflow:ellipsis; max-width:200px;"><i class="fa fa-user me-1 text-success"></i> ${email}</span>
+                                    <button class="btn btn-link text-danger p-0 delete-sub-btn" data-email="${email}" style="font-size:14px; line-height:1; text-decoration:none;" title="Remove recipient">&times;</button>
+                                `;
+                                badgeList.appendChild(item);
+                            });
+
+                            document.querySelectorAll('.delete-sub-btn').forEach(b => {
+                                b.addEventListener('click', function() {
+                                    const em = this.getAttribute('data-email');
+                                    fetch('/api/subscribers/delete', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ email: em })
+                                    })
+                                    .then(r => r.json())
+                                    .then(d => {
+                                        showSubMsg(`Removed ${em}`);
+                                        refreshSubscribers();
+                                    });
+                                });
+                            });
+                        }
+                    }
+                })
+                .catch(() => {});
+        }
+
+        if (subBtn) {
+            refreshSubscribers();
+
+            subBtn.addEventListener('click', () => {
+                const email = subInput.value.trim();
+                if (!email || !email.includes('@')) {
+                    showSubMsg("Please enter a valid email address.", true);
+                    return;
+                }
+                subBtn.disabled = true;
+                subBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Subscribing...';
+
+                fetch('/api/subscribers', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: email })
+                })
+                .then(r => r.json())
+                .then(res => {
+                    subBtn.disabled = false;
+                    subBtn.innerHTML = '<i class="fa fa-bell"></i> Subscribe';
+                    if (res.status === 'ok') {
+                        subInput.value = '';
+                        showSubMsg(res.message);
+                        refreshSubscribers();
+                    } else {
+                        showSubMsg(res.message || "Failed to subscribe.", true);
+                    }
+                })
+                .catch(err => {
+                    subBtn.disabled = false;
+                    subBtn.innerHTML = '<i class="fa fa-bell"></i> Subscribe';
+                    showSubMsg("Network error connecting to server.", true);
+                });
+            });
+
+            subTestBtn.addEventListener('click', () => {
+                const email = subInput.value.trim();
+                if (!email || !email.includes('@')) {
+                    showSubMsg("Enter an email in the box to test.", true);
+                    return;
+                }
+                subTestBtn.disabled = true;
+                subTestBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i>';
+
+                fetch('/api/test_subscriber_email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: email })
+                })
+                .then(r => r.json())
+                .then(res => {
+                    subTestBtn.disabled = false;
+                    subTestBtn.innerHTML = '<i class="fa fa-paper-plane"></i> Test';
+                    if (res.status === 'ok') {
+                        showSubMsg(res.message);
+                    } else {
+                        showSubMsg(res.message || "Test failed.", true);
+                    }
+                })
+                .catch(err => {
+                    subTestBtn.disabled = false;
+                    subTestBtn.innerHTML = '<i class="fa fa-paper-plane"></i> Test';
+                    showSubMsg("Network error sending test.", true);
+                });
+            });
+        }
+    });
+  </script>
+{% endblock %}

@@ -1,0 +1,28 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.ipynb_checkpoints/
+
+# SQLite databases & runtime storage
+*.db
+*.db-journal
+*.sqlite3
+
+# Virtual environments & IDEs
+.env
+.venv/
+env/
+venv/
+.idea/
+.vscode/
+
+# Duplicate large dataset in root (data/CICIDS2017_subset.csv is used)
+IDS_Dataset.csv
+
+# Logs & temporary exports
+*.log
+*.csv.tmp
+ai_nids_attack_logs.csv
+iot_attack_logs.csv
+scratch/
