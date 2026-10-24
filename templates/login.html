@@ -105,26 +105,70 @@
     </div>
 
     <div class="login-box">
-      <h2><i class="fa-solid fa-user-shield"></i> {{ APP_NAME }} Login</h2>
+      {% if portal == 'admin' %}
+      <div style="display: inline-block; background: rgba(0, 210, 255, 0.12); border: 1px solid rgba(0, 210, 255, 0.4); color: #00d2ff; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; margin-bottom: 12px; text-transform: uppercase;">
+        <i class="fa-solid fa-shield-halved me-1"></i> SOC Administrator Portal
+      </div>
+      <h2><i class="fa-solid fa-lock text-cyan"></i> Administrator Login</h2>
+      <p style="color: #9aa7c7; font-size: 0.85rem; margin-bottom: 1.5rem;">
+        Secure access to the AI-NIDS Security Operations Center.
+      </p>
+      {% else %}
+      <div style="display: inline-block; background: rgba(0, 230, 118, 0.12); border: 1px solid rgba(0, 230, 118, 0.4); color: #00e676; padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 700; letter-spacing: 0.8px; margin-bottom: 12px; text-transform: uppercase;">
+        <i class="fa-solid fa-user-shield me-1"></i> User Access Portal
+      </div>
+      <h2><i class="fa-solid fa-user-shield text-cyan"></i> User Login</h2>
+      <p style="color: #9aa7c7; font-size: 0.85rem; margin-bottom: 1.5rem;">
+        Access network monitoring & security analytics.
+      </p>
+      {% endif %}
+
+      {% if error %}
+      <div style="background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fca5a5; padding: 10px 14px; border-radius: 8px; margin-bottom: 1.2rem; font-size: 0.88rem; text-align: left;">
+        <i class="fa-solid fa-triangle-exclamation me-1"></i> {{ error }}
+      </div>
+      {% endif %}
+
       <form method="POST">
+        <input type="hidden" name="portal" value="{{ portal or 'user' }}">
         <div class="form-group">
-          <label for="username"><i class="fa-solid fa-user"></i> Username</label>
-          <input id="username" name="username" type="text" required />
+          <label for="username">
+            <i class="fa-solid {% if portal == 'admin' %}fa-user-gear{% else %}fa-user{% endif %}"></i> 
+            {% if portal == 'admin' %}Administrator Email or Username{% else %}Username or Email{% endif %}
+          </label>
+          <input id="username" name="username" type="text" placeholder="{% if portal == 'admin' %}apashamkirikiri320@gmail.com{% else %}Enter your username or email{% endif %}" required />
         </div>
 
         <div class="form-group">
           <label for="password"><i class="fa-solid fa-lock"></i> Password</label>
-          <input id="password" name="password" type="password" required />
+          <input id="password" name="password" type="password" placeholder="••••••••" required />
         </div>
 
         <button type="submit" class="btn-login">
-          <i class="fa-solid fa-right-to-bracket"></i> Login
+          <i class="fa-solid {% if portal == 'admin' %}fa-key{% else %}fa-right-to-bracket{% endif %}"></i> 
+          {% if portal == 'admin' %}Authenticate Administrator{% else %}Sign In to AI-NIDS{% endif %}
         </button>
       </form>
 
+      {% if portal == 'admin' %}
+      <div style="margin-top: 1.5rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 1rem; font-size: 0.85rem; color: #888;">
+        <p class="mb-2" style="font-size: 0.78rem; color: #627196;">
+          <i class="fa-solid fa-shield me-1"></i> Public administrator registration is restricted.
+        </p>
+        <a href="/" style="color: #00ccff; text-decoration: none;"><i class="fa-solid fa-arrow-left me-1"></i> Back to Welcome Page</a>
+        <span style="color: #444; margin: 0 8px;">|</span>
+        <a href="/login" style="color: #9aa7c7; text-decoration: none;">User Login</a>
+      </div>
+      {% else %}
       <p class="register-link">
-        New here? <a href="/register">Register now</a>
+        New analyst? <a href="/register">Create Account</a>
       </p>
+      <div style="margin-top: 1rem; font-size: 0.85rem;">
+        <a href="/" style="color: #627196; text-decoration: none;"><i class="fa-solid fa-arrow-left me-1"></i> Back to Welcome Page</a>
+        <span style="color: #444; margin: 0 8px;">|</span>
+        <a href="/login?portal=admin" style="color: #00ccff; text-decoration: none;"><i class="fa-solid fa-lock me-1"></i> Admin Portal</a>
+      </div>
+      {% endif %}
     </div>
   </div>
 

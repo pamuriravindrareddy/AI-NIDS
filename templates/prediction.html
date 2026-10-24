@@ -179,7 +179,7 @@
                     <table class="table table-striped mb-0">
                         <thead>
                             <tr style="background: #eee; font-size: 12px;">
-                                <th>Time</th><th>Source IP</th><th>Score</th><th>Result</th>
+                                <th>Time</th><th>Source IP</th><th>Score</th><th>Result</th><th>Audit</th>
                             </tr>
                         </thead>
                         <tbody id="flow_logs">
@@ -336,6 +336,7 @@
                     <td>${log.src_ip}</td>
                     <td>${(log.attack_score || 0).toFixed(2)}</td>
                     <td>${statusText}</td>
+                    <td><span class="text-muted small">-</span></td>
                 `;
                 tableBody.appendChild(row);
             });
@@ -397,11 +398,31 @@
             const timeStr = new Date(data.ts * 1000).toLocaleTimeString();
             const statusText = isAttack ? (data.reason || "ATTACK") : "Normal";
 
+            const abuseBadge = (isAttack && data.threat_intel && data.threat_intel.abuse_score !== undefined)
+                ? `<span class="badge bg-dark border border-warning text-warning ms-1" style="font-size:9px;" title="AbuseIPDB Threat Reputation Score"><i class="bi bi-shield-exclamation me-1"></i>${data.threat_intel.abuse_score}% Risk</span>`
+                : '';
+
+            // Cache flow for visual explainability modal
+            const flowKey = 'flow_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+            window._liveFlows = window._liveFlows || {};
+            window._liveFlows[flowKey] = data;
+
+            const explainBtn = `<button class="btn btn-sm btn-outline-info py-0 px-1 ms-1" style="font-size:10px;" onclick="openExplainLiveModal('${flowKey}')" title="Explain AI Decision with SHAP"><i class="fa fa-brain"></i> Explain</button>`;
+
+            const auditBtn = `<td>
+                ${isAttack ? `
+                  <button class="btn btn-sm btn-outline-success py-0 px-1" style="font-size:10px;" onclick="auditFlow('${data.src_ip}', 1, ${data.attack_score || 1.0})" title="Confirm Threat"><i class="fa fa-check"></i></button>
+                  <button class="btn btn-sm btn-outline-danger py-0 px-1 ms-1" style="font-size:10px;" onclick="auditFlow('${data.src_ip}', 0, ${data.attack_score || 1.0})" title="Mark as False Positive"><i class="fa fa-times"></i> FP</button>
+                ` : ''}
+                ${explainBtn}
+            </td>`;
+
             row.innerHTML = `
                 <td>${timeStr}</td>
-                <td>${data.src_ip}</td>
+                <td>${data.src_ip} ${data.ips_blocked ? '<span class="badge bg-danger ms-1" style="font-size:10px;"><i class="bi bi-shield-slash-fill me-1"></i>BLOCKED</span>' : ''} ${abuseBadge}</td>
                 <td>${(data.attack_score || 0).toFixed(2)}</td>
                 <td>${statusText}</td>
+                ${auditBtn}
             `;
             
             tableBody.prepend(row);
@@ -409,10 +430,28 @@
 
             // Update Map & Persist Marker
             if (data.geo && data.geo.lat !== undefined && data.geo.lon !== undefined) {
-                L.circleMarker([data.geo.lat, data.geo.lon], {
-                    radius: 6,
+                const marker = L.circleMarker([data.geo.lat, data.geo.lon], {
+                    radius: isAttack ? 7 : 5,
                     fillColor: isAttack ? "#ff4d4d" : "#4facfe",
                     color: "#fff",
+                    weight: 1,
+                    fillOpacity: 0.85
+                });
+
+                if (isAttack) {
+                    const repScore = (data.threat_intel && data.threat_intel.abuse_score !== undefined) ? data.threat_intel.abuse_score : (data.abuse_score || 0);
+                    marker.bindPopup(`
+                        <div style="font-size: 12px; min-width: 170px;">
+                            <strong style="color: #ff4d4d;"><i class="bi bi-shield-slash-fill me-1"></i>Intrusion Threat</strong><br/>
+                            <b>IP:</b> <code>${data.src_ip}</code><br/>
+                            <b>Attack Score:</b> ${(data.attack_score || 0).toFixed(2)}<br/>
+                            <b>Location:</b> ${data.country || 'Unknown'}<br/>
+                            <b>Abuse Confidence:</b> <span class="badge ${repScore >= 70 ? 'bg-danger' : 'bg-warning'}">${repScore}%</span><br/>
+                            ${data.ips_blocked ? '<span style="color:#00e5ff; font-weight:bold;">🛑 IPS Firewall Blocked</span>' : ''}
+                        </div>
+                    `);
+                }
+                marker.addTo(markers);
                     weight: 1,
                     fillOpacity: 0.8
                 }).addTo(markers);
@@ -444,6 +483,149 @@
         socket.on('email_alert_sent', (info) => {
             showToast(`📧 Alert email delivered to ${info.recipient} (IP: ${info.src_ip})`);
         });
+
+        // Active IPS Firewall Auto-Block Notification Listener
+        socket.on('ip_blocked', (info) => {
+            showToast(`🛡️ ACTIVE IPS: Attacker IP ${info.ip} auto-blocked by firewall (${info.duration_minutes || 15}m quarantine)`);
+        });
+
+        socket.on('ip_unblocked', (info) => {
+            showToast(`🔓 IPS: Firewall block released for IP ${info.ip}`);
+        });
+
+        // Human-in-the-Loop MLOps: Live Audit Handler
+        window.auditFlow = function(ip, label, score) {
+            const isTP = (label === 1);
+            const actionText = isTP ? 'Confirm Threat' : 'Mark as False Positive (lift block)';
+            if (!confirm(`Are you sure you want to ${actionText} for IP ${ip}?`)) return;
+
+            fetch('/api/flows/feedback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    src_ip: ip,
+                    verified_label: label,
+                    original_score: score,
+                    notes: isTP ? 'Verified intrusion' : 'Flagged as false positive by analyst'
+                })
+            })
+            .then(r => r.json())
+            .then(res => {
+                showToast(isTP ? `✅ Confirmed threat for ${ip}` : `❌ Flagged ${ip} as False Positive (firewall unblocked)`);
+            })
+            .catch(err => alert("Feedback failed: " + err.message));
+        };
+
+        // Visual Explainable AI (SHAP) Modal Handler
+        let liveShapChart = null;
+        window.openExplainLiveModal = function(flowKey) {
+            const flowData = (window._liveFlows && window._liveFlows[flowKey]) || {};
+            const modalEl = document.getElementById('explainModal');
+            if (!modalEl) return;
+            const bsModal = new bootstrap.Modal(modalEl);
+
+            document.getElementById('expSrcIp').innerText = flowData.src_ip || 'Unknown';
+            const isAttack = (flowData.label === 1);
+            document.getElementById('expLabelBadge').innerHTML = isAttack 
+                ? '<span class="badge bg-danger">ATTACK</span>'
+                : '<span class="badge bg-success">NORMAL</span>';
+            document.getElementById('expScore').innerText = (flowData.attack_score || 0).toFixed(4);
+
+            const exp = flowData.explanation || {};
+            document.getElementById('expMethod').innerText = (exp.method || 'SHAP TreeExplainer').toUpperCase();
+            document.getElementById('expSummaryText').innerText = exp.summary || (isAttack ? 'Primary attack indicators detected.' : 'Normal traffic characteristics.');
+
+            const topFeatures = exp.top_features || [];
+            renderShapUI(topFeatures, exp.base_value || 0.5);
+
+            bsModal.show();
+        };
+
+        function renderShapUI(topFeatures, baseValue) {
+            const tbody = document.getElementById('expFeaturesTableBody');
+            if (!tbody) return;
+            tbody.innerHTML = '';
+
+            if (!topFeatures || topFeatures.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-muted">No feature attributions available for this flow.</td></tr>';
+                return;
+            }
+
+            topFeatures.forEach(f => {
+                const isPushAttack = (f.direction === 'attack');
+                const badge = isPushAttack 
+                    ? '<span class="badge bg-danger-subtle text-danger border border-danger-subtle" style="font-size:10px;"><i class="fa fa-arrow-up me-1"></i>Attack</span>'
+                    : '<span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size:10px;"><i class="fa fa-arrow-down me-1"></i>Benign</span>';
+                const sign = f.shap_value > 0 ? '+' : '';
+                const rawVal = f.raw_value !== undefined && f.raw_value !== null ? f.raw_value : '-';
+
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="font-monospace fw-semibold text-light">${f.feature}</td>
+                    <td class="text-end font-monospace text-muted">${rawVal}</td>
+                    <td class="text-end font-monospace fw-bold ${isPushAttack ? 'text-danger' : 'text-success'}">${sign}${f.shap_value.toFixed(4)}</td>
+                    <td class="text-end font-monospace">${f.percentage}%</td>
+                    <td class="text-end">${badge}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            // Render Chart.js Horizontal Bar Chart
+            const canvas = document.getElementById('shapChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (liveShapChart) {
+                liveShapChart.destroy();
+            }
+
+            const rev = [...topFeatures].reverse();
+            const labels = rev.map(f => f.feature);
+            const dataValues = rev.map(f => f.shap_value);
+            const bgColors = rev.map(f => f.direction === 'attack' ? 'rgba(239, 68, 68, 0.85)' : 'rgba(16, 185, 129, 0.85)');
+            const borderColors = rev.map(f => f.direction === 'attack' ? '#ef4444' : '#10b981');
+
+            liveShapChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'SHAP Attribution',
+                        data: dataValues,
+                        backgroundColor: bgColors,
+                        borderColor: borderColors,
+                        borderWidth: 1,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const val = context.raw;
+                                    const sign = val > 0 ? '+' : '';
+                                    return ` Attribution: ${sign}${val.toFixed(4)}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255,255,255,0.08)' },
+                            ticks: { color: '#94a3b8', font: { size: 10 } }
+                        },
+                        y: {
+                            grid: { display: false },
+                            ticks: { color: '#e2e8f0', font: { size: 11 } }
+                        }
+                    }
+                }
+            });
+        }
 
         // Reset Counters Button
         const resetBtn = document.getElementById('btnResetCounters');
@@ -711,4 +893,73 @@
         }
     });
   </script>
+
+  <!-- Visual Explainable AI (SHAP XAI) Modal -->
+  <div class="modal fade" id="explainModal" tabindex="-1" aria-labelledby="explainModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content" style="background: #111827; color: #e5e7eb; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.6);">
+        <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.08); padding: 16px 24px;">
+          <div class="d-flex align-items-center gap-2">
+            <div style="width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(135deg, #6366f1, #3b82f6); display: flex; align-items: center; justify-content: center; color: white;">
+              <i class="fa fa-brain" style="font-size: 18px;"></i>
+            </div>
+            <div>
+              <h5 class="modal-title m-0" id="explainModalLabel" style="font-size: 16px; font-weight: 700; color: #fff;">AI Decision Explainability <span class="badge bg-primary ms-1" style="font-size: 10px; font-weight: 600;">SHAP TreeExplainer</span></h5>
+              <div class="text-muted" style="font-size: 12px;">Local Feature Attribution &amp; Decision Decomposition</div>
+            </div>
+          </div>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body p-4">
+          <!-- Flow Context Pills -->
+          <div class="d-flex flex-wrap gap-2 mb-3 p-3 rounded" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); font-size: 12px;">
+            <div><span class="text-muted">Source IP:</span> <strong id="expSrcIp" class="font-monospace text-info">--</strong></div>
+            <div class="ms-3"><span class="text-muted">Classification:</span> <span id="expLabelBadge">--</span></div>
+            <div class="ms-3"><span class="text-muted">Threat Score:</span> <strong id="expScore" class="font-monospace text-warning">--</strong></div>
+            <div class="ms-3"><span class="text-muted">Engine:</span> <span id="expMethod" class="badge bg-secondary font-monospace" style="font-size: 10px;">SHAP</span></div>
+          </div>
+
+          <!-- Human Readable Summary Banner -->
+          <div id="expSummaryBanner" class="alert alert-dark border border-secondary mb-3 py-2 px-3 d-flex align-items-center gap-2" style="font-size: 12px; background: rgba(30, 41, 59, 0.7);">
+            <i class="fa fa-lightbulb text-warning"></i>
+            <span id="expSummaryText">Loading explanation breakdown...</span>
+          </div>
+
+          <!-- Chart Container -->
+          <div class="mb-4" style="background: rgba(15, 23, 42, 0.6); padding: 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+              <span style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #94a3b8;">
+                <i class="fa fa-chart-bar me-1"></i> Feature Attribution (<span class="text-danger">&larr; Attack Drivers</span> vs <span class="text-success">Benign Baseline &rarr;</span>)
+              </span>
+              <span class="text-muted" style="font-size: 11px;">Values in &Delta; Log-Odds / Attribution</span>
+            </div>
+            <div style="height: 220px; position: relative;">
+              <canvas id="shapChart"></canvas>
+            </div>
+          </div>
+
+          <!-- Top Features Table -->
+          <div class="table-responsive">
+            <table class="table table-dark table-sm table-hover m-0" style="font-size: 12px;">
+              <thead>
+                <tr class="text-muted border-secondary">
+                  <th>Feature Name</th>
+                  <th class="text-end">Raw Value</th>
+                  <th class="text-end">SHAP Value (&phi;)</th>
+                  <th class="text-end">Impact Share</th>
+                  <th class="text-end">Direction</th>
+                </tr>
+              </thead>
+              <tbody id="expFeaturesTableBody">
+                <!-- populated dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer" style="border-top: 1px solid rgba(255,255,255,0.08); padding: 12px 24px;">
+          <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+        </div>
+      </div>
+    </div>
+  </div>
 {% endblock %}

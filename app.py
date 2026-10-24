@@ -27,14 +27,22 @@ from flask_socketio import SocketIO
 from werkzeug.security import generate_password_hash, check_password_hash
 from threading import Lock
 from functools import wraps
+from collections import defaultdict
 
 # Local Imports
 import threading
-from inference import predict_flow, set_detector_params, get_detector_info
+from inference import predict_flow, explain_flow, set_detector_params, get_detector_info, get_model_health
 from utils import (
     init_db, log_prediction, DB_PATH, get_metrics_data, get_all_logs_csv,
-    get_live_stats, add_alert_subscriber, remove_alert_subscriber, get_alert_subscribers
+    get_live_stats, add_alert_subscriber, remove_alert_subscriber, get_alert_subscribers,
+    get_severity, get_protocol_name, get_geoip_details, get_admin_overview_data, get_historical_flows,
+    find_user_by_login_id, DESIGNATED_ADMIN_EMAIL,
+    block_ip_firewall, unblock_ip_firewall, get_active_blocked_ips, get_all_blocked_ips, cleanup_expired_firewall_blocks,
+    send_webhook_alert, format_webhook_payload,
+    get_ip_threat_reputation, get_recent_threat_intel,
+    submit_flow_feedback, get_feedback_summary, get_prediction_by_id
 )
+
 
 # ===============================================================
 # CENTRAL BRANDING CONFIGURATION
@@ -50,6 +58,13 @@ APP_ALERT_PREFIX = "AI-NIDS Security Alert"
 # ===============================================================
 app = Flask(__name__, template_folder='templates', static_folder='static')
 app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET', 'ai-nids-secret-key-2026')
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+
+# Login rate limiting state
+LOGIN_ATTEMPTS = defaultdict(list)
+LOGIN_MAX_ATTEMPTS = 5
+LOGIN_LOCKOUT_SECONDS = 300  # 5 minutes
 
 @app.context_processor
 def inject_branding():
@@ -59,6 +74,8 @@ def inject_branding():
         'APP_DASHBOARD_TITLE': APP_DASHBOARD_TITLE,
         'APP_MONITOR_TITLE': APP_MONITOR_TITLE,
         'APP_ALERT_PREFIX': APP_ALERT_PREFIX,
+        'current_user': session.get('user'),
+        'current_role': session.get('role', 'user'),
     }
 
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode='threading')
@@ -86,7 +103,14 @@ IOT_CONFIG = {
     'ipv4_enabled': True,
     'tcp_enabled': True,
     'syn_flood_rule': False,
-    'admin_email': 'pamuriravindrareddy4@gmail.com',
+    'ips_auto_block': True,
+    'ips_block_threshold': 0.90,
+    'ips_block_duration': 15,
+    'webhook_enabled': False,
+    'webhook_url': '',
+    'abuseipdb_enabled': False,
+    'abuseipdb_api_key': '',
+    'admin_email': DESIGNATED_ADMIN_EMAIL,
     'status': 'OFF'  # ON/OFF
 }
 
@@ -176,6 +200,37 @@ def login_required(f):
         return f(*args, **kwargs)
     return wrapped
 
+def admin_required(f):
+    @wraps(f)
+    def wrapped(*args, **kwargs):
+        if 'user' not in session:
+            if request.path.startswith('/api/'):
+                return jsonify({'status': 'error', 'message': 'Authentication required. Please log in.'}), 401
+            return redirect(url_for('login', next=request.path))
+
+        sess_role = session.get('role')
+        sess_email = (session.get('email') or '').strip().lower()
+        sess_user = (session.get('user') or '').strip().lower()
+
+        # Strict single-owner check: must have 'admin' role AND match designated admin identity
+        is_owner = (
+            sess_role == 'admin' and (
+                sess_email == DESIGNATED_ADMIN_EMAIL.lower() or
+                sess_user == DESIGNATED_ADMIN_EMAIL.lower() or
+                sess_user == 'apashamkirikiri320'
+            )
+        )
+
+        if not is_owner:
+            if request.path.startswith('/api/'):
+                return jsonify({'status': 'error', 'message': 'Forbidden: Designated administrator privileges required.'}), 403
+            return render_template('403.html', user=session.get('user')), 403
+
+        return f(*args, **kwargs)
+    return wrapped
+
+
+
 def send_alert_email(attack_type, details):
     """Send SMTP notification to admin and subscribed users in a non-blocking background thread."""
     global last_email_time
@@ -264,17 +319,34 @@ Automated alert dispatched from AI-NIDS Security Admin ({SMTP_USER}).
 # ===============================================================
 @app.route('/')
 def index():
-    return render_template('index.html')
+    return render_template('index.html', config=IOT_CONFIG)
 
 @app.route('/admin', methods=['GET', 'POST'])
-@login_required
+@admin_required
 def admin():
     if request.method == 'POST':
         # Update Config
-        IOT_CONFIG['device_name'] = request.form.get('device_name')
+        IOT_CONFIG['device_name'] = request.form.get('device_name', IOT_CONFIG['device_name'])
         IOT_CONFIG['ipv4_enabled'] = 'ipv4' in request.form
         IOT_CONFIG['tcp_enabled'] = 'tcp' in request.form
         IOT_CONFIG['syn_flood_rule'] = 'syn_flood' in request.form
+        IOT_CONFIG['ips_auto_block'] = 'ips_auto_block' in request.form
+        IOT_CONFIG['webhook_enabled'] = 'webhook_enabled' in request.form
+        IOT_CONFIG['webhook_url'] = (request.form.get('webhook_url') or '').strip()
+        IOT_CONFIG['abuseipdb_enabled'] = 'abuseipdb_enabled' in request.form
+        IOT_CONFIG['abuseipdb_api_key'] = (request.form.get('abuseipdb_api_key') or '').strip()
+        if request.form.get('ips_block_threshold'):
+            try:
+                thresh_val = float(request.form.get('ips_block_threshold'))
+                IOT_CONFIG['ips_block_threshold'] = max(0.5, min(1.0, thresh_val))
+            except (ValueError, TypeError):
+                pass
+        if request.form.get('ips_block_duration'):
+            try:
+                dur_val = int(request.form.get('ips_block_duration'))
+                IOT_CONFIG['ips_block_duration'] = max(1, dur_val)
+            except (ValueError, TypeError):
+                pass
         admin_email = (request.form.get('admin_email') or '').strip().lower()
         if admin_email and is_valid_email(admin_email):
             IOT_CONFIG['admin_email'] = admin_email
@@ -284,40 +356,389 @@ def admin():
     
     # Refresh IP on load
     IOT_CONFIG['ip_address'] = get_local_ip()
-    return render_template('admin.html', config=IOT_CONFIG, user=session.get('user'))
+    overview_data = get_admin_overview_data()
+    model_health = get_model_health()
+    return render_template(
+        'admin_overview.html',
+        config=IOT_CONFIG,
+        user=session.get('user'),
+        role=session.get('role', 'admin'),
+        overview=overview_data,
+        model_health=model_health
+    )
+
+@app.route('/api/admin/overview')
+@admin_required
+def api_admin_overview():
+    data = get_admin_overview_data()
+    data['model_health'] = get_model_health()
+    return jsonify(data)
+
+@app.route('/api/flows/history')
+@login_required
+def api_flows_history():
+    page = request.args.get('page', 1)
+    per_page = request.args.get('per_page', 50)
+    sort_by = request.args.get('sort_by', 'ts')
+    sort_dir = request.args.get('sort_dir', 'DESC')
+    
+    filters = {
+        'src_ip': request.args.get('src_ip', ''),
+        'dst_ip': request.args.get('dst_ip', ''),
+        'label': request.args.get('label', ''),
+        'reason': request.args.get('reason', ''),
+        'min_score': request.args.get('min_score', ''),
+        'max_score': request.args.get('max_score', ''),
+        'severity': request.args.get('severity', ''),
+        'start_time': request.args.get('start_time', ''),
+        'end_time': request.args.get('end_time', '')
+    }
+    result = get_historical_flows(
+        page=page,
+        per_page=per_page,
+        filters=filters,
+        sort_by=sort_by,
+        sort_dir=sort_dir
+    )
+    return jsonify(result)
+
+# ===============================================================
+# ACTIVE IPS & FIREWALL MANAGEMENT ENDPOINTS
+# ===============================================================
+@app.route('/api/ips/blocked', methods=['GET'])
+@login_required
+def api_get_blocked_ips():
+    active_only = request.args.get('active_only', 'true').lower() in ('true', '1')
+    if active_only:
+        records = get_active_blocked_ips()
+    else:
+        limit = request.args.get('limit', 50)
+        records = get_all_blocked_ips(limit=limit)
+    return jsonify({
+        'status': 'ok',
+        'ips_auto_block': IOT_CONFIG.get('ips_auto_block', True),
+        'ips_block_threshold': IOT_CONFIG.get('ips_block_threshold', 0.90),
+        'ips_block_duration': IOT_CONFIG.get('ips_block_duration', 15),
+        'blocked_count': len(records),
+        'records': records
+    })
+
+@app.route('/api/ips/unblock', methods=['POST'])
+@admin_required
+def api_unblock_ip():
+    data = request.get_json(silent=True) or request.form.to_dict()
+    ip = (data.get('ip') or '').strip()
+    if not ip:
+        return jsonify({'status': 'error', 'message': 'Missing IP address'}), 400
+    success, msg = unblock_ip_firewall(ip)
+    socketio.emit('ip_unblocked', {'ip': ip, 'msg': msg})
+    return jsonify({'status': 'ok' if success else 'error', 'message': msg, 'ip': ip})
+
+@app.route('/api/ips/block_manual', methods=['POST'])
+@admin_required
+def api_block_ip_manual():
+    data = request.get_json(silent=True) or request.form.to_dict()
+    ip = (data.get('ip') or '').strip()
+    duration = int(data.get('duration', IOT_CONFIG.get('ips_block_duration', 15)))
+    reason = (data.get('reason') or 'Manual Administrative Quarantine').strip()
+    if not ip:
+        return jsonify({'status': 'error', 'message': 'Missing IP address'}), 400
+    success, msg = block_ip_firewall(ip, duration_minutes=duration, reason=reason, score=1.0)
+    if success:
+        socketio.emit('ip_blocked', {'ip': ip, 'score': 1.0, 'reason': reason, 'duration_minutes': duration})
+    return jsonify({'status': 'ok' if success else 'error', 'message': msg, 'ip': ip})
+
+@app.route('/api/test_webhook', methods=['POST'])
+@admin_required
+def api_test_webhook():
+    data = request.get_json(silent=True) or request.form.to_dict()
+    url = (data.get('webhook_url') or IOT_CONFIG.get('webhook_url') or '').strip()
+    if not url:
+        return jsonify({'status': 'error', 'message': 'Please provide a valid Webhook URL.'}), 400
+
+    test_details = {
+        'ts': time.time(),
+        'src_ip': '198.51.100.42',
+        'dst_ip': IOT_CONFIG.get('ip_address', '127.0.0.1'),
+        'dst_port': 443,
+        'protocol': 'HTTPS',
+        'attack_score': 0.98,
+        'severity': 'Critical',
+        'reason': 'Test Incident Verification: SYN Flood & Recon Scan',
+        'country': 'United States',
+        'ips_blocked': True
+    }
+
+    ok, msg = send_webhook_alert(test_details, url)
+    return jsonify({
+        'status': 'ok' if ok else 'error',
+        'message': msg
+    })
+
+@app.route('/api/threat_intel/check', methods=['GET', 'POST'])
+@login_required
+def api_threat_intel_check():
+    ip = (
+        request.args.get('ip') or
+        (request.get_json(silent=True) and request.get_json(silent=True).get('ip')) or
+        (request.form and request.form.get('ip')) or
+        ''
+    ).strip()
+    if not ip:
+        return jsonify({'status': 'error', 'message': 'Missing IP address parameter.'}), 400
+
+    api_key = IOT_CONFIG.get('abuseipdb_api_key') if IOT_CONFIG.get('abuseipdb_enabled') else None
+    intel = get_ip_threat_reputation(ip, api_key=api_key)
+    return jsonify({
+        'status': 'ok',
+        'threat_intel': intel
+    })
+
+# ===============================================================
+# HUMAN-IN-THE-LOOP MLOPS: ANALYST FEEDBACK ENDPOINTS
+# ===============================================================
+@app.route('/api/flows/feedback', methods=['POST'])
+@login_required
+def api_submit_feedback():
+    data = request.get_json(silent=True) or request.form.to_dict()
+    flow_id = data.get('flow_id')
+    verified_label = int(data.get('verified_label', 1))
+    src_ip = (data.get('src_ip') or '').strip()
+    original_score = float(data.get('original_score', 1.0)) if data.get('original_score') is not None else None
+    notes = (data.get('notes') or '').strip()
+    analyst_user = session.get('user', 'analyst')
+
+    ok, msg = submit_flow_feedback(
+        flow_id=flow_id,
+        verified_label=verified_label,
+        analyst_user=analyst_user,
+        src_ip=src_ip,
+        original_score=original_score,
+        notes=notes
+    )
+
+    if ok:
+        socketio.emit('feedback_recorded', {
+            'flow_id': flow_id,
+            'src_ip': src_ip,
+            'verified_label': verified_label,
+            'analyst': analyst_user
+        })
+
+    return jsonify({
+        'status': 'ok' if ok else 'error',
+        'message': msg,
+        'summary': get_feedback_summary()
+    })
+
+@app.route('/api/flows/feedback/stats', methods=['GET'])
+@login_required
+def api_get_feedback_stats():
+    return jsonify({
+        'status': 'ok',
+        'summary': get_feedback_summary()
+    })
+
+# ===============================================================
+# VISUAL EXPLAINABLE AI (XAI / SHAP) ENDPOINTS
+# ===============================================================
+@app.route('/api/flows/<int:flow_id>/explain', methods=['GET'])
+@login_required
+def api_explain_flow_by_id(flow_id):
+    """Local explainability for a historical flow stored in SQLite."""
+    pred = get_prediction_by_id(flow_id)
+    if not pred:
+        return jsonify({'status': 'error', 'message': f'Flow #{flow_id} not found.'}), 404
+
+    features = {}
+    if pred.get('features'):
+        try:
+            features = json.loads(pred['features'])
+        except Exception:
+            features = {}
+
+    top_k = int(request.args.get('top_k', 5))
+    explanation = explain_flow(features, top_k=top_k)
+
+    return jsonify({
+        'status': 'ok',
+        'flow_id': flow_id,
+        'src_ip': pred.get('src_ip'),
+        'dst_ip': pred.get('dst_ip'),
+        'timestamp': pred.get('ts'),
+        'label': pred.get('label'),
+        'attack_score': pred.get('attack_score'),
+        'reason': pred.get('reason'),
+        'explanation': explanation
+    })
+
+@app.route('/api/flows/explain', methods=['POST'])
+@login_required
+def api_explain_flow_custom():
+    """Local explainability for custom flow vectors submitted by analysts."""
+    data = request.get_json(silent=True) or request.form.to_dict()
+    flow_features = data.get('features') or data
+    top_k = int(data.get('top_k', 5))
+
+    explanation = explain_flow(flow_features, top_k=top_k)
+    return jsonify({
+        'status': 'ok',
+        'explanation': explanation
+    })
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    portal = (request.args.get('portal') or request.form.get('portal') or 'user').strip().lower()
+    is_admin_portal = (portal == 'admin')
+
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
+        client_ip = request.headers.get('X-Forwarded-For', request.remote_addr or '127.0.0.1').split(',')[0].strip()
+        now = time.time()
+        # Clean older attempts outside lockout window
+        LOGIN_ATTEMPTS[client_ip] = [t for t in LOGIN_ATTEMPTS[client_ip] if now - t < LOGIN_LOCKOUT_SECONDS]
+        if len(LOGIN_ATTEMPTS[client_ip]) >= LOGIN_MAX_ATTEMPTS:
+            error = f"Too many failed login attempts. Temporarily locked out. Please try again in {int(LOGIN_LOCKOUT_SECONDS // 60)} minutes."
+            return render_template('login.html', portal=portal, error=error), 429
+
+        login_id = (request.form.get('username') or '').strip()
+        password = request.form.get('password') or ''
+
+        if not login_id or not password:
+            LOGIN_ATTEMPTS[client_ip].append(now)
+            return render_template('login.html', portal=portal, error="Invalid username or password."), 401
+
         conn = get_db()
-        user = conn.execute('SELECT * FROM users WHERE username=?', (username,)).fetchone()
-        if user and check_password_hash(user[2], password):
-            session['user'] = user[1]
+        user = find_user_by_login_id(conn, login_id)
+        # user tuple: (id, username, email, password_hash, role)
+        if user and check_password_hash(user[3], password):
+            user_id = user[0]
+            username = user[1]
+            user_email = (user[2] or '').strip()
+            user_role = user[4] or 'user'
+
+            # Strict single-owner enforcement:
+            # ONLY the designated administrator account receives 'admin' role in session
+            is_designated_admin = (
+                user_role == 'admin' and (
+                    user_email.lower() == DESIGNATED_ADMIN_EMAIL.lower() or
+                    username.lower() == DESIGNATED_ADMIN_EMAIL.lower() or
+                    username.lower() == 'apashamkirikiri320'
+                )
+            )
+
+            # Reject normal users attempting to enter the administrator portal
+            if is_admin_portal and not is_designated_admin:
+                LOGIN_ATTEMPTS[client_ip].append(now)
+                return render_template(
+                    'login.html',
+                    portal='admin',
+                    error="Access Denied: Standard user accounts cannot log into the SOC Administrator Portal. Please use User Login."
+                ), 403
+
+            # Reset rate limit tracker on successful authentication
+            LOGIN_ATTEMPTS.pop(client_ip, None)
+
+            # Regenerate session / clear stale data
+            session.clear()
+
+            session['user_id'] = user_id
+            session['user'] = username
+            session['email'] = user_email
+            session['role'] = 'admin' if is_designated_admin else 'user'
+
+            if session['role'] == 'admin':
+                return redirect(url_for('admin'))
             return redirect(url_for('prediction'))
-        return "Invalid credentials"
-    return render_template('login.html')
+
+        # Record failed attempt
+        LOGIN_ATTEMPTS[client_ip].append(now)
+        return render_template('login.html', portal=portal, error="Invalid username or password."), 401
+
+    return render_template('login.html', portal=portal)
+
+@app.route('/admin/login')
+def admin_login():
+    return redirect(url_for('login', portal='admin'))
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
+        username = (request.form.get('username') or '').strip()
+        password = request.form.get('password') or ''
+        raw_email = (request.form.get('email') or '').strip().lower()
+
+        if not username or not password:
+            return render_template('register.html', error="Username and password are required."), 400
+
+        # Disallow registering as the designated administrator or with designated admin email
+        if (username.lower() in [DESIGNATED_ADMIN_EMAIL.lower(), 'apashamkirikiri320'] or 
+            raw_email == DESIGNATED_ADMIN_EMAIL.lower()):
+            return render_template('register.html', error="Registration with administrator credentials or email is prohibited."), 400
+
+        # Validate email if provided
+        if raw_email:
+            if not is_valid_email(raw_email):
+                return render_template('register.html', error="Please provide a valid email address."), 400
+            user_email = raw_email
+        else:
+            user_email = f"{username}@ai-nids.local"
+
+        # Explicitly enforce USER role — ignore any client-supplied role or is_admin fields
+        forced_role = 'user'
         hashed = generate_password_hash(password, method='pbkdf2:sha256')
+
         try:
             conn = get_db()
-            conn.execute('INSERT INTO users (username, password) VALUES (?, ?)', (username, hashed))
+            conn.execute(
+                'INSERT INTO users (username, email, password, role) VALUES (?, ?, ?, ?)',
+                (username, user_email, hashed, forced_role)
+            )
             conn.commit()
             return redirect(url_for('login'))
         except sqlite3.IntegrityError:
-            return "Username exists"
+            return render_template('register.html', error="An account with this username or email already exists."), 409
+
     return render_template('register.html')
 
 @app.route('/logout')
 def logout():
-    session.pop('user', None)
+    session.clear()
     return redirect(url_for('index'))
+
+@app.route('/api/admin/change_password', methods=['POST'])
+@admin_required
+def api_admin_change_password():
+    data = request.get_json(silent=True) or request.form or {}
+    current_password = data.get('current_password', '')
+    new_password = data.get('new_password', '')
+    confirm_password = data.get('confirm_password', '')
+
+    if not current_password or not new_password:
+        return jsonify({'status': 'error', 'message': 'Current and new passwords are required.'}), 400
+
+    if new_password != confirm_password:
+        return jsonify({'status': 'error', 'message': 'New password and confirmation do not match.'}), 400
+
+    if len(new_password) < 4:
+        return jsonify({'status': 'error', 'message': 'New password must be at least 4 characters long.'}), 400
+
+    conn = get_db()
+    c = conn.cursor()
+    c.execute("""
+        SELECT id, password FROM users 
+        WHERE LOWER(COALESCE(email, '')) = LOWER(?) 
+           OR LOWER(username) = LOWER(?)
+           OR LOWER(username) = 'apashamkirikiri320'
+    """, (DESIGNATED_ADMIN_EMAIL, DESIGNATED_ADMIN_EMAIL))
+    admin_row = c.fetchone()
+
+    if not admin_row or not check_password_hash(admin_row[1], current_password):
+        return jsonify({'status': 'error', 'message': 'Current password verification failed.'}), 401
+
+    new_hash = generate_password_hash(new_password, method='pbkdf2:sha256')
+    c.execute("UPDATE users SET password = ? WHERE id = ?", (new_hash, admin_row[0]))
+    conn.commit()
+    return jsonify({'status': 'ok', 'message': 'Administrator password updated successfully.'})
 
 def run_simulation(csv_path, speed=1.0):
     """Background simulation thread to feed dataset flows."""
@@ -378,7 +799,7 @@ def analysis():
     return render_template('analysis.html', user=session.get('user'))
 
 @app.route('/download_logs')
-@login_required
+@admin_required
 def download_logs():
     csv_data = get_all_logs_csv()
     response = make_response(csv_data)
@@ -404,7 +825,7 @@ def api_live_stats():
     return jsonify(stats)
 
 @app.route('/api/settings', methods=['POST'])
-@login_required
+@admin_required
 def api_settings():
     data = request.get_json(silent=True) or request.form
     alpha = data.get('alpha')
@@ -414,7 +835,7 @@ def api_settings():
     return jsonify({'status': 'ok', 'detector': get_detector_info()})
 
 @app.route('/api/simulation', methods=['POST'])
-@login_required
+@admin_required
 def api_simulation():
     global SIMULATION_STATE, IOT_CONFIG
     data = request.get_json(silent=True) or request.form
@@ -445,7 +866,7 @@ def api_simulation():
     return jsonify({'status': 'unknown_action'})
 
 @app.route('/api/reset_stats', methods=['POST'])
-@login_required
+@admin_required
 def api_reset_stats():
     global SESSION_STATS, RECENT_GEO_MARKERS
     SESSION_STATS['packets'] = 0
@@ -455,7 +876,7 @@ def api_reset_stats():
     return jsonify({'status': 'ok'})
 
 @app.route('/api/test_email', methods=['POST'])
-@login_required
+@admin_required
 def api_test_email():
     data = request.get_json(silent=True) or request.form or {}
     if 'email' in data:
@@ -578,7 +999,7 @@ Automated confirmation from AI-NIDS (AI-Powered Network Intrusion Detection Syst
     })
 
 @app.route('/api/subscribers/delete', methods=['POST'])
-@login_required
+@admin_required
 def api_remove_subscriber():
     data = request.get_json(silent=True) or request.form
     email = (data.get('email') or '').strip().lower()
@@ -586,6 +1007,7 @@ def api_remove_subscriber():
         return jsonify({'status': 'error', 'message': 'Email is required'}), 400
     remove_alert_subscriber(email)
     return jsonify({'status': 'ok', 'message': f'{email} unsubscribed.', 'subscribers': get_alert_subscribers()})
+
 
 @app.route('/api/test_subscriber_email', methods=['POST'])
 @login_required
@@ -678,6 +1100,15 @@ def handle_new_flow(data):
             reason = "ML Anomaly Detection"
 
         # 3. Prepare Output
+        dst_port_raw = data.get('Destination Port') or data.get('dst_port')
+        dst_port = int(dst_port_raw) if dst_port_raw is not None else 80
+        proto_name = get_protocol_name(proto, dst_port)
+        latency_val = round(float(res.get('latency_ms', 0.0)), 2)
+        sev = get_severity(attack_score)
+        geo_details = get_geoip_details(src_ip)
+        intel_key = IOT_CONFIG.get('abuseipdb_api_key') if IOT_CONFIG.get('abuseipdb_enabled') else None
+        threat_intel = get_ip_threat_reputation(src_ip, api_key=intel_key)
+
         out = {
             'ts': ts,
             'src_ip': src_ip,
@@ -685,7 +1116,18 @@ def handle_new_flow(data):
             'attack_score': attack_score,
             'label': final_label,
             'reason': reason,
-            'shap_explain': res.get('shap_explain')
+            'shap_explain': res.get('shap_explain'),
+            'explanation': res.get('explanation'),
+            'features': data,
+            'latency_ms': latency_val,
+            'threat_intel': threat_intel,
+            'abuse_score': threat_intel.get('abuse_score', 0),
+            'dst_port': dst_port,
+            'protocol': proto_name,
+            'severity': sev['level'],
+            'severity_class': sev['badge_class'],
+            'country': geo_details['country'],
+            'city': geo_details['city']
         }
 
         # GeoIP
@@ -704,8 +1146,10 @@ def handle_new_flow(data):
             'lat': float(out['geo']['lat']),
             'lon': float(out['geo']['lon']),
             'isAttack': (final_label == 1),
-            'src_ip': src_ip
+            'src_ip': src_ip,
+            'country': geo_details['country']
         })
+
         if len(RECENT_GEO_MARKERS) > 150:
             RECENT_GEO_MARKERS.pop(0)
 
@@ -739,9 +1183,72 @@ def handle_new_flow(data):
             socketio.emit('alarm', out)
             send_alert_email("DDoS / Intrusion", out)
 
+            # Active IPS Auto-Blocking Interception
+            if IOT_CONFIG.get('ips_auto_block') and attack_score >= float(IOT_CONFIG.get('ips_block_threshold', 0.90)):
+                dur = int(IOT_CONFIG.get('ips_block_duration', 15))
+                block_ok, block_msg = block_ip_firewall(
+                    ip=src_ip,
+                    duration_minutes=dur,
+                    reason=f"Auto-IPS Block: {reason or 'High-Severity Intrusion'}",
+                    score=attack_score
+                )
+                if block_ok:
+                    out['ips_blocked'] = True
+                    out['ips_msg'] = block_msg
+                    socketio.emit('ip_blocked', {
+                        'ip': src_ip,
+                        'score': attack_score,
+                        'reason': reason,
+                        'duration_minutes': dur
+                    })
+
+            # Instant Incident Webhook Push (Discord / Slack)
+            if IOT_CONFIG.get('webhook_enabled') and IOT_CONFIG.get('webhook_url'):
+                dispatch_webhook_alert_async(out)
+
     except Exception as e:
         print(f"[ERROR] {e}")
         traceback.print_exc()
+
+LAST_WEBHOOK_TIME = 0.0
+
+def dispatch_webhook_alert_async(details):
+    """Dispatches a rich incident card to the configured Discord/Slack webhook in a background thread."""
+    url = (IOT_CONFIG.get('webhook_url') or '').strip()
+    if not IOT_CONFIG.get('webhook_enabled') or not url:
+        return
+
+    global LAST_WEBHOOK_TIME
+    now = time.time()
+    # 15s cooldown per webhook dispatch
+    if now - LAST_WEBHOOK_TIME < 15.0:
+        return
+    LAST_WEBHOOK_TIME = now
+
+    def _worker():
+        ok, msg = send_webhook_alert(details, url)
+        if ok:
+            print(f"[WEBHOOK] 🚀 Incident card dispatched to webhook.")
+            socketio.emit('webhook_alert_sent', {'url': url, 'src_ip': details.get('src_ip')})
+        else:
+            print(f"[WEBHOOK WARN] Delivery failed: {msg}")
+
+    threading.Thread(target=_worker, daemon=True, name="Webhook-Dispatch-Worker").start()
+
+def auto_expire_firewall_worker():
+    """Background daemon to regularly clean up expired temporary IP blocks."""
+    while True:
+        try:
+            time.sleep(30)
+            unblocked = cleanup_expired_firewall_blocks()
+            for ip in unblocked:
+                print(f"[IPS AUTO-EXPIRE] Temporary firewall block expired for: {ip}")
+                socketio.emit('ip_unblocked', {'ip': ip, 'reason': 'Auto-lease expired'})
+        except Exception:
+            time.sleep(10)
+
+# Launch IPS auto-expiry daemon
+threading.Thread(target=auto_expire_firewall_worker, daemon=True, name="IPS-Auto-Expire-Daemon").start()
 
 if __name__ == '__main__':
     print("🚀 AI-NIDS (AI-Powered Network Intrusion Detection System) Running on http://localhost:5000")

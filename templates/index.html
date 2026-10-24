@@ -1,256 +1,857 @@
-{% extends "base.html" %}
-{% block title %}{{ APP_NAME }} | {{ APP_FULL_NAME }}{% endblock %}
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ APP_NAME }} | {{ APP_FULL_NAME }}</title>
 
-{% block head %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/fontawesome.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/templatemo-host-cloud.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/owl.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap-icons.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
 
     <style>
-        /* --- VISIBILITY FIXES (Dark Text on White Cards) --- */
-        body { color: #1e1e1e; }
+        :root {
+            --bg-deep: #070913;
+            --bg-surface: #0e1322;
+            --bg-surface-elevated: #141b30;
+            --bg-card: #10162a;
+            --border-dim: #1e2842;
+            --border-bright: #2d3c63;
+            
+            --cyan-glow: #00d2ff;
+            --cyan-dim: rgba(0, 210, 255, 0.15);
+            --blue-glow: #0077ff;
+            --blue-dim: rgba(0, 119, 255, 0.15);
+            --red-glow: #ff3366;
+            --red-dim: rgba(255, 51, 102, 0.15);
+            --green-glow: #00e676;
+            --green-dim: rgba(0, 230, 118, 0.15);
+            --purple-glow: #9d4edd;
+            --purple-dim: rgba(157, 78, 221, 0.15);
 
-        /* Card Styling */
-        .service-item {
-            background-color: #ffffff !important;
-            box-shadow: 0 0 15px rgba(0,0,0,0.1);
-            text-align: center;
-            padding: 50px 30px !important;
-            border-radius: 5px;
-            transition: all 0.3s ease;
-            height: 100%;
+            --text-primary: #f0f4fc;
+            --text-secondary: #9aa7c7;
+            --text-muted: #627196;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            background-color: var(--bg-deep);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Subtle Cyber Grid & Ambient Background */
+        .cyber-bg-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-image: 
+                linear-gradient(rgba(0, 210, 255, 0.025) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 210, 255, 0.025) 1px, transparent 1px);
+            background-size: 48px 48px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .ambient-glow {
+            position: fixed;
+            top: -20%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 900px;
+            height: 600px;
+            background: radial-gradient(ellipse at center, rgba(0, 119, 255, 0.14) 0%, rgba(0, 210, 255, 0.05) 40%, rgba(7, 9, 19, 0) 70%);
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .page-wrapper {
             position: relative;
             z-index: 1;
-        }
-        .service-item:hover {
-            transform: translateY(-10px);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-        }
-
-        /* Icons */
-        .service-item .icon {
-            margin: 0 auto 25px auto;
-            width: 90px; height: 90px;
-            background: linear-gradient(to right, #4facfe 0%, #00f2fe 100%);
-            border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            color: #fff; font-size: 36px;
-            transition: all 0.3s;
-        }
-        .service-item:hover .icon {
-            transform: scale(1.1);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
         }
 
-        /* Text Visibility */
-        .service-item h4 {
-            color: #1e1e1e !important;
+        /* Top Navigation Bar */
+        .soc-navbar {
+            background: rgba(14, 19, 34, 0.85);
+            backdrop-filter: blur(14px);
+            border-bottom: 1px solid var(--border-dim);
+            padding: 14px 0;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .brand-logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+
+        .brand-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 9px;
+            background: linear-gradient(135deg, #00d2ff 0%, #7928ca 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 19px;
+            color: #fff;
+            box-shadow: 0 0 16px rgba(0, 210, 255, 0.4);
+        }
+
+        .brand-title {
+            font-size: 18px;
             font-weight: 800;
-            font-size: 22px;
-            margin-bottom: 15px;
-            text-transform: capitalize;
-        }
-        .service-item p {
-            color: #555 !important;
-            font-size: 15px;
-            line-height: 1.7;
-            font-weight: 500;
-            opacity: 1 !important;
+            letter-spacing: 0.5px;
+            color: #fff;
+            margin: 0;
+            line-height: 1.1;
         }
 
-        /* Banner Text Visibility */
-        .banner .caption h2 {
+        .brand-title span {
+            color: var(--cyan-glow);
+        }
+
+        .brand-tag {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            font-weight: 600;
+            display: block;
+        }
+
+        .nav-link-soc {
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 500;
+            text-decoration: none;
+            padding: 6px 14px;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .nav-link-soc:hover {
+            color: var(--cyan-glow);
+            background: rgba(0, 210, 255, 0.08);
+        }
+
+        .status-pill {
+            background: var(--bg-deep);
+            border: 1px solid var(--border-dim);
+            border-radius: 20px;
+            padding: 5px 12px;
+            font-size: 11px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--green-glow);
+            box-shadow: 0 0 8px var(--green-glow);
+        }
+
+        /* Hero Section */
+        .hero-section {
+            padding: 60px 0 40px;
+            text-align: center;
+        }
+
+        .chip-soc {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 210, 255, 0.08);
+            border: 1px solid rgba(0, 210, 255, 0.25);
+            border-radius: 30px;
+            padding: 6px 16px;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 1px;
+            color: var(--cyan-glow);
+            text-transform: uppercase;
+            margin-bottom: 22px;
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.15);
+        }
+
+        .hero-title {
             font-size: 48px;
             font-weight: 900;
-            text-transform: uppercase;
+            letter-spacing: -0.5px;
             color: #fff;
-            text-shadow: 0 5px 15px rgba(0,0,0,0.3);
-            margin-bottom: 20px;
+            margin-bottom: 12px;
+            text-shadow: 0 0 30px rgba(0, 210, 255, 0.25);
         }
-        .banner .caption p {
-            color: #fff !important;
+
+        .hero-title span {
+            background: linear-gradient(135deg, #00d2ff 0%, #0077ff 60%, #c77dff 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero-subtitle {
             font-size: 20px;
-            font-weight: 400;
-            text-shadow: 0 2px 5px rgba(0,0,0,0.5);
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 14px;
         }
 
-        /* Custom Buttons using Theme Gradient */
-        .btn-theme {
-            display: inline-block;
-            background: linear-gradient(to right, #4facfe 0%, #00f2fe 100%);
-            color: #fff !important;
-            font-size: 14px;
-            font-weight: 700;
-            padding: 15px 35px;
-            border-radius: 30px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            transition: all 0.3s;
-            border: none;
-            margin: 0 10px;
-        }
-        .btn-theme:hover {
-            opacity: 0.9;
-            transform: translateY(-3px);
-            box-shadow: 0 10px 20px rgba(0,242,254,0.3);
+        .hero-desc {
+            font-size: 15px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            max-width: 680px;
+            margin: 0 auto 32px;
         }
 
-        .btn-white {
-            display: inline-block;
-            background-color: #fff;
-            color: #4facfe !important;
-            font-size: 14px;
-            font-weight: 700;
-            padding: 15px 35px;
-            border-radius: 30px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            transition: all 0.3s;
-            border: none;
-            margin: 0 10px;
+        /* Live Telemetry Bar */
+        .telemetry-bar {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 16px;
+            margin-bottom: 50px;
         }
-        .btn-white:hover {
-            background-color: #f0f0f0;
-            color: #00f2fe !important;
+
+        .tele-card {
+            background: rgba(16, 22, 42, 0.7);
+            border: 1px solid var(--border-dim);
+            border-radius: 8px;
+            padding: 10px 18px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .tele-card strong {
+            color: #fff;
+            font-weight: 700;
+        }
+
+        .tele-card span {
+            color: var(--text-muted);
+        }
+
+        /* Central Dual Access Cards */
+        .access-cards-section {
+            padding: 10px 0 60px;
+        }
+
+        .section-tag {
+            text-align: center;
+            margin-bottom: 35px;
+        }
+
+        .section-tag h3 {
+            font-size: 22px;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 6px;
+        }
+
+        .section-tag p {
+            font-size: 14px;
+            color: var(--text-muted);
+            margin: 0;
+        }
+
+        /* Portal Card Component */
+        .portal-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-dim);
+            border-radius: 16px;
+            padding: 38px 32px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            overflow: hidden;
+        }
+
+        .portal-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: transparent;
+            transition: all 0.3s;
+        }
+
+        .portal-card-admin::before {
+            background: linear-gradient(90deg, #00d2ff, #7928ca);
+        }
+
+        .portal-card-user::before {
+            background: linear-gradient(90deg, #00e676, #00d2ff);
+        }
+
+        .portal-card:hover {
+            transform: translateY(-6px);
+            border-color: var(--border-bright);
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4), 0 0 24px var(--cyan-dim);
+        }
+
+        .portal-card-admin:hover {
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4), 0 0 30px rgba(0, 210, 255, 0.2);
+            border-color: rgba(0, 210, 255, 0.4);
+        }
+
+        .portal-card-user:hover {
+            box-shadow: 0 16px 36px rgba(0, 0, 0, 0.4), 0 0 30px rgba(0, 230, 118, 0.2);
+            border-color: rgba(0, 230, 118, 0.4);
+        }
+
+        .card-badge {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.8px;
+            text-transform: uppercase;
+            padding: 4px 10px;
+            border-radius: 20px;
+            margin-bottom: 20px;
+            width: fit-content;
+        }
+
+        .card-badge-admin {
+            background: rgba(157, 78, 221, 0.15);
+            color: #c77dff;
+            border: 1px solid rgba(157, 78, 221, 0.3);
+        }
+
+        .card-badge-user {
+            background: rgba(0, 230, 118, 0.15);
+            color: #00e676;
+            border: 1px solid rgba(0, 230, 118, 0.3);
+        }
+
+        .portal-icon-wrap {
+            width: 68px;
+            height: 68px;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            margin-bottom: 22px;
+            box-shadow: 0 0 24px rgba(0, 0, 0, 0.3);
+        }
+
+        .portal-icon-admin {
+            background: linear-gradient(135deg, #00d2ff 0%, #7928ca 100%);
+            color: #fff;
+            box-shadow: 0 0 20px rgba(0, 210, 255, 0.35);
+        }
+
+        .portal-icon-user {
+            background: linear-gradient(135deg, #00e676 0%, #0099ff 100%);
+            color: #fff;
+            box-shadow: 0 0 20px rgba(0, 230, 118, 0.35);
+        }
+
+        .portal-title {
+            font-size: 24px;
+            font-weight: 800;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+
+        .portal-desc {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            margin-bottom: 24px;
+            min-height: 42px;
+        }
+
+        /* Features List in Card */
+        .feature-list {
+            list-style: none;
+            padding: 0;
+            margin: 0 0 32px;
+            flex: 1;
+        }
+
+        .feature-list li {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 11px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .feature-list li i {
+            font-size: 14px;
+        }
+
+        .feature-list-admin li i {
+            color: var(--cyan-glow);
+        }
+
+        .feature-list-user li i {
+            color: var(--green-glow);
+        }
+
+        /* Access Buttons */
+        .btn-portal-admin {
+            background: linear-gradient(135deg, #00d2ff 0%, #0077ff 100%);
+            color: #fff;
+            border: none;
+            font-weight: 700;
+            font-size: 14px;
+            border-radius: 8px;
+            padding: 13px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            text-decoration: none;
+            transition: all 0.2s;
+            box-shadow: 0 4px 16px rgba(0, 210, 255, 0.3);
+        }
+
+        .btn-portal-admin:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 210, 255, 0.45);
+            color: #fff;
+        }
+
+        .btn-portal-user {
+            background: linear-gradient(135deg, #00e676 0%, #0099ff 100%);
+            color: #fff;
+            border: none;
+            font-weight: 700;
+            font-size: 14px;
+            border-radius: 8px;
+            padding: 13px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-decoration: none;
+            transition: all 0.2s;
+            box-shadow: 0 4px 16px rgba(0, 230, 118, 0.25);
+            flex: 1;
+        }
+
+        .btn-portal-user:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 230, 118, 0.4);
+            color: #fff;
+        }
+
+        .btn-portal-register {
+            background: rgba(0, 210, 255, 0.08);
+            border: 1px solid var(--border-bright);
+            color: var(--cyan-glow);
+            font-weight: 600;
+            font-size: 14px;
+            border-radius: 8px;
+            padding: 13px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            text-decoration: none;
+            transition: all 0.2s;
+            flex: 1;
+        }
+
+        .btn-portal-register:hover {
+            background: rgba(0, 210, 255, 0.16);
+            border-color: var(--cyan-glow);
+            color: #fff;
+            transform: translateY(-2px);
+        }
+
+        .portal-notice {
+            margin-top: 16px;
+            font-size: 11px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Secondary Architecture Section */
+        .arch-section {
+            padding: 40px 0 60px;
+            border-top: 1px solid var(--border-dim);
+        }
+
+        .arch-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-dim);
+            border-radius: 12px;
+            padding: 24px;
+            height: 100%;
+        }
+
+        .arch-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            background: var(--bg-deep);
+            border: 1px solid var(--border-bright);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            color: var(--cyan-glow);
+            margin-bottom: 16px;
+        }
+
+        .arch-card h5 {
+            font-size: 16px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+
+        .arch-card p {
+            font-size: 13px;
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin: 0;
+        }
+
+        /* Footer */
+        .soc-footer {
+            background: #05070d;
+            border-top: 1px solid var(--border-dim);
+            padding: 28px 0;
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: auto;
+        }
+
+        .footer-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            margin: 0 10px;
+            transition: color 0.2s;
+        }
+
+        .footer-link:hover {
+            color: var(--cyan-glow);
         }
     </style>
-{% endblock %}
+</head>
 
-{% block content %}
+<body>
+<div class="cyber-bg-overlay"></div>
+<div class="ambient-glow"></div>
 
-    <div class="banner">
-      <div class="container">
-        <div class="row">
-          <div class="col-md-8 offset-md-2">
-            <div class="header-text caption">
-              <h2>Network Security &<br>Intrusion Defense</h2>
-              <p>AI-Powered Network Intrusion Detection System.<br>
-                 Defending network infrastructure against volumetric attacks and cyber threats using Machine Learning.</p>
-              
-              <div class="buttons-section" style="margin-top: 40px;">
-                <a href="/prediction" class="btn-theme">
-                   <i class="fa fa-chart-line"></i> Live Monitor
-                </a>
-                <a href="/admin" class="btn-white">
-                   <i class="fa fa-cogs"></i> Admin Config
-                </a>
-              </div>
-
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="services section" style="background-color: #f9f9f9; padding-top: 80px;">
-      <div class="container">
-        
-        <div class="row">
-          <div class="col-md-12">
-            <div class="section-heading text-center" style="margin-bottom: 60px;">
-              <span style="color: #4facfe; font-weight: 700; text-transform: uppercase; letter-spacing: 1px;">System Capabilities</span>
-              <h2 style="color: #1e1e1e; margin-top: 10px;">Comprehensive Protection</h2>
-              <p style="color: #666; max-width: 600px; margin: 0 auto;">Our platform combines rule-based filtering with anomaly detection to secure your network infrastructure.</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="row">
-          
-          <div class="col-lg-4 col-md-6 col-sm-12 mb-4">
-            <div class="service-item">
-              <div class="icon">
-                <i class="fa fa-globe"></i>
-              </div>
-              <h4>Real-time Dashboard</h4>
-              <p>Visualize source IPs on a live map and monitor packet latency in real-time using our WebSocket-powered interface.</p>
-            </div>
-          </div>
-
-          <div class="col-lg-4 col-md-6 col-sm-12 mb-4">
-            <div class="service-item">
-              <div class="icon">
-                <i class="fa fa-shield-alt"></i>
-              </div>
-              <h4>DDoS & Threat Detection</h4>
-              <p>Instantly detects high-volume attacks like SYN Floods, UDP floods, and volumetric network anomalies.</p>
-            </div>
-          </div>
-
-          <div class="col-lg-4 col-md-6 col-sm-12 mb-4">
-            <div class="service-item">
-              <div class="icon">
-                <i class="fa fa-brain"></i>
-              </div>
-              <h4>ML Engine</h4>
-              <p>Powered by a Hybrid Random Forest & Isolation Forest model to identify zero-day anomalies with high precision.</p>
-            </div>
-          </div>
-
-          <div class="col-lg-4 col-md-6 col-sm-12 mb-4">
-            <div class="service-item">
-              <div class="icon">
-                <i class="fa fa-envelope-open-text"></i>
-              </div>
-              <h4>Smart Alerts</h4>
-              <p>Sends immediate SMTP email notifications to administrators with detailed attack vectors and timestamps.</p>
-            </div>
-          </div>
-
-          <div class="col-lg-4 col-md-6 col-sm-12 mb-4">
-            <div class="service-item">
-              <div class="icon">
-                <i class="fa fa-server"></i>
-              </div>
-              <h4>Node & Policy Control</h4>
-              <p>Manage network node status, enforce protocol firewall policies, and update security configurations remotely.</p>
-            </div>
-          </div>
-
-          <div class="col-lg-4 col-md-6 col-sm-12 mb-4">
-            <div class="service-item">
-              <div class="icon">
-                <i class="fa fa-file-csv"></i>
-              </div>
-              <h4>Forensic Reporting</h4>
-              <p>Download comprehensive attack logs (CSV) containing flow features and prediction scores for analysis.</p>
-            </div>
-          </div>
-
-        </div>
-      </div>
-    </div>
-    <div class="section cta" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); padding: 80px 0;">
-      <div class="container">
-        <div class="row align-items-center">
-          <div class="col-md-8">
-            <h2 style="color: #fff; font-weight: 800; margin-bottom: 10px;">Ready to Secure Your Network?</h2>
-            <p style="color: #fff; font-size: 18px; opacity: 0.9; margin: 0;">Configure your network security parameters and enable the AI detection engine now.</p>
-          </div>
-          <div class="col-md-4 text-end">
-            <a href="/admin" class="btn-white" style="padding: 15px 40px;">
-               Go to Admin Panel
+<div class="page-wrapper">
+    <!-- SOC Topbar Navigation -->
+    <nav class="soc-navbar">
+        <div class="container d-flex align-items-center justify-content-between">
+            <a href="/" class="brand-logo">
+                <div class="brand-icon">
+                    <i class="bi bi-shield-lock-fill"></i>
+                </div>
+                <div>
+                    <h1 class="brand-title">AI<span>-NIDS</span></h1>
+                    <span class="brand-tag">Intrusion Detection System</span>
+                </div>
             </a>
-          </div>
+
+            <div class="d-none d-md-flex align-items-center gap-2">
+                <a href="/prediction" class="nav-link-soc">
+                    <i class="bi bi-activity me-1"></i> Live Monitor
+                </a>
+                <a href="/analysis" class="nav-link-soc">
+                    <i class="bi bi-pie-chart-fill me-1"></i> Forensic Analytics
+                </a>
+                {% if session.get('role') == 'admin' %}
+                <a href="/admin" class="nav-link-soc text-cyan">
+                    <i class="bi bi-speedometer2 me-1"></i> Admin Overview
+                </a>
+                {% endif %}
+            </div>
+
+            <div class="d-flex align-items-center gap-3">
+                <div class="status-pill d-none d-sm-inline-flex">
+                    <span class="status-dot"></span>
+                    <span>DEFENSE ARMED</span>
+                </div>
+
+                {% if session.get('user') %}
+                    <span class="badge bg-dark border border-secondary text-light px-2 py-1" style="font-size: 11px;">
+                        <i class="bi bi-person-fill me-1"></i>{{ session.get('user') }}
+                    </span>
+                    <a href="/logout" class="btn btn-outline-danger btn-sm px-3" style="font-size: 12px; border-radius: 6px;">
+                        <i class="bi bi-box-arrow-right me-1"></i> Logout
+                    </a>
+                {% else %}
+                    <a href="/login" class="btn btn-outline-soc btn-sm px-3" style="border: 1px solid var(--border-bright); color: #fff; font-size: 12px; border-radius: 6px; text-decoration: none;">
+                        <i class="bi bi-box-arrow-in-right me-1"></i> User Login
+                    </a>
+                    <a href="/login?portal=admin" class="btn btn-cyan btn-sm px-3" style="background: linear-gradient(135deg, #00d2ff, #0077ff); color: #fff; font-size: 12px; border-radius: 6px; text-decoration: none; font-weight: 600;">
+                        <i class="bi bi-shield-lock-fill me-1"></i> Admin Portal
+                    </a>
+                {% endif %}
+            </div>
         </div>
-      </div>
-    </div>
+    </nav>
 
-{% endblock %}
+    <!-- Main Hero Section -->
+    <section class="hero-section">
+        <div class="container">
+            <div class="chip-soc">
+                <i class="fa-solid fa-satellite-dish"></i> Enterprise Security Operations Center
+            </div>
 
-{% block scripts %}
-    <script src="{{ url_for('static', filename='js/owl.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/accordions.js') }}"></script>
-    
-    <script>
-        // Optional: Navbar Scroll Effect if needed
-        window.addEventListener('scroll', function() {
-            const navbar = document.querySelector('.navbar');
-            if (navbar) {
-                if (window.scrollY > 50) {
-                    navbar.classList.add('scrolled');
-                } else {
-                    navbar.classList.remove('scrolled');
-                }
-            }
-        });
-    </script>
-{% endblock %}
+            <h2 class="hero-title">
+                {{ APP_NAME }} <span>Network Defense</span>
+            </h2>
+
+            <div class="hero-subtitle">
+                {{ APP_FULL_NAME }}
+            </div>
+
+            <p class="hero-desc">
+                Defending enterprise network infrastructure against volumetric intrusions, zero-day anomalies,
+                and malicious traffic streams in real-time using dual supervised and unsupervised machine learning intelligence.
+            </p>
+
+            <!-- Real-time Telemetry Pills -->
+            <div class="telemetry-bar">
+                <div class="tele-card">
+                    <i class="bi bi-cpu-fill text-cyan"></i>
+                    <div>
+                        <strong>Hybrid ML Core</strong>
+                        <span>RF + IF Ensemble</span>
+                    </div>
+                </div>
+                <div class="tele-card">
+                    <i class="bi bi-database-check text-success"></i>
+                    <div>
+                        <strong>133,000+</strong>
+                        <span>Flows Analyzed</span>
+                    </div>
+                </div>
+                <div class="tele-card">
+                    <i class="bi bi-lightning-charge-fill text-warning"></i>
+                    <div>
+                        <strong>&lt; 45ms</strong>
+                        <span>Inference Latency</span>
+                    </div>
+                </div>
+                <div class="tele-card">
+                    <i class="bi bi-bell-fill text-danger"></i>
+                    <div>
+                        <strong>Automated</strong>
+                        <span>SMTP Dispatches</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Central Dual Access Portals -->
+    <section class="access-cards-section">
+        <div class="container">
+            <div class="section-tag">
+                <h3>Select Access Portal</h3>
+                <p>Choose your authorization tier to access the AI-NIDS security platform</p>
+            </div>
+
+            <div class="row g-4 justify-content-center">
+                <!-- CARD 1: ADMINISTRATOR ACCESS -->
+                <div class="col-lg-5 col-md-6 col-12">
+                    <div class="portal-card portal-card-admin">
+                        <span class="card-badge card-badge-admin">
+                            <i class="bi bi-shield-fill-check me-1"></i> Restricted SOC Access
+                        </span>
+
+                        <div class="portal-icon-wrap portal-icon-admin">
+                            <i class="bi bi-shield-lock-fill"></i>
+                        </div>
+
+                        <h4 class="portal-title">Administrator Access</h4>
+                        <p class="portal-desc">
+                            Secure access to the AI-NIDS Security Operations Center.
+                        </p>
+
+                        <ul class="feature-list feature-list-admin">
+                            <li>
+                                <i class="bi bi-check-circle-fill"></i>
+                                <span>Monitored Gateway Node & Firewall Configuration</span>
+                            </li>
+                            <li>
+                                <i class="bi bi-check-circle-fill"></i>
+                                <span>Dynamic TCP & SYN Flood Rule Enforcement</span>
+                            </li>
+                            <li>
+                                <i class="bi bi-check-circle-fill"></i>
+                                <span>Inference Sensitivity & Anomaly Score Thresholds</span>
+                            </li>
+                            <li>
+                                <i class="bi bi-check-circle-fill"></i>
+                                <span>SOC Executive Overview & Historical Flow Explorer</span>
+                            </li>
+                            <li>
+                                <i class="bi bi-check-circle-fill"></i>
+                                <span>Attack Log Export (CSV) & Alert Distribution List</span>
+                            </li>
+                        </ul>
+
+                        <div>
+                            <a href="/login?portal=admin" class="btn-portal-admin w-100">
+                                <i class="bi bi-key-fill"></i> Admin Login
+                            </a>
+                        </div>
+
+                        <div class="portal-notice">
+                            <i class="bi bi-lock-fill text-warning"></i>
+                            <span>Authorized single-owner SOC administrator access only. Public registration is disabled.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CARD 2: USER ACCESS -->
+                <div class="col-lg-5 col-md-6 col-12">
+                    <div class="portal-card portal-card-user">
+                        <span class="card-badge card-badge-user">
+                            <i class="bi bi-person-check-fill me-1"></i> Security Analyst & Monitoring
+                        </span>
+
+                        <div class="portal-icon-wrap portal-icon-user">
+                            <i class="bi bi-people-fill"></i>
+                        </div>
+
+                        <h4 class="portal-title">User Access</h4>
+                        <p class="portal-desc">
+                            Access network monitoring and security analytics.
+                        </p>
+
+                        <ul class="feature-list feature-list-user">
+                            <li>
+                                <i class="bi bi-check-circle-fill"></i>
+                                <span>Real-time Live Traffic Stream Monitor (50-flow live buffer)</span>
+                            </li>
+                            <li>
+                                <i class="bi bi-check-circle-fill"></i>
+                                <span>Interactive Global Attack Map with GeoIP Coordinates</span>
+                            </li>
+                            <li>
+                                <i class="bi bi-check-circle-fill"></i>
+                                <span>Forensic Analytics, Confusion Matrix & ROC Curves</span>
+                            </li>
+                            <li>
+                                <i class="bi bi-check-circle-fill"></i>
+                                <span>Real-Time Volumetric Threat Alarms via WebSockets</span>
+                            </li>
+                            <li>
+                                <i class="bi bi-check-circle-fill"></i>
+                                <span>Incident Alert Email Subscriptions</span>
+                            </li>
+                        </ul>
+
+                        <div class="d-flex gap-2">
+                            <a href="/login" class="btn-portal-user">
+                                <i class="bi bi-box-arrow-in-right"></i> User Login
+                            </a>
+                            <a href="/register" class="btn-portal-register">
+                                <i class="bi bi-person-plus-fill"></i> Create Account
+                            </a>
+                        </div>
+
+                        <div class="portal-notice">
+                            <i class="bi bi-info-circle-fill text-info"></i>
+                            <span>Standard user access. New registrations automatically receive standard user role.</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Integrated Defense Architecture Highlights -->
+    <section class="arch-section">
+        <div class="container">
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="arch-card">
+                        <div class="arch-icon">
+                            <i class="bi bi-cpu-fill"></i>
+                        </div>
+                        <h5>Hybrid ML Ensemble</h5>
+                        <p>100-tree supervised Random Forest paired with unsupervised Isolation Forest for zero-day network anomaly classification.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="arch-card">
+                        <div class="arch-icon">
+                            <i class="bi bi-shield-check"></i>
+                        </div>
+                        <h5>Sub-50ms Latency</h5>
+                        <p>High-throughput packet feature extraction evaluates flow IAT, packet lengths, and handshake metrics in under 45 milliseconds.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="arch-card">
+                        <div class="arch-icon">
+                            <i class="bi bi-envelope-check-fill"></i>
+                        </div>
+                        <h5>Automated SMTP Alerts</h5>
+                        <p>Immediate incident dispatching delivers intrusion alerts with source IP, attack classification, and timestamps to security stakeholders.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="soc-footer">
+        <div class="container text-center">
+            <div class="mb-2">
+                <a href="/" class="footer-link">Welcome</a>
+                <span class="text-muted">•</span>
+                <a href="/prediction" class="footer-link">Live Monitor</a>
+                <span class="text-muted">•</span>
+                <a href="/analysis" class="footer-link">Forensic Analytics</a>
+                <span class="text-muted">•</span>
+                <a href="/login?portal=admin" class="footer-link">Admin Portal</a>
+                <span class="text-muted">•</span>
+                <a href="/login" class="footer-link">User Login</a>
+            </div>
+            <div>
+                Copyright &copy; 2026 <strong>{{ APP_NAME }}</strong> — {{ APP_FULL_NAME }}. All Rights Reserved.
+            </div>
+        </div>
+    </footer>
+</div>
+
+<script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+</body>
+</html>

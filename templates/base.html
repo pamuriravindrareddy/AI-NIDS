@@ -37,26 +37,37 @@
                 </button>
 
                 <div class="collapse navbar-collapse" id="navbarNav">
-                    <ul class="navbar-nav ms-lg-auto">
+                    <ul class="navbar-nav ms-lg-auto align-items-center">
                         <li class="nav-item">
                             <a class="nav-link {% if request.path == '/' %}active{% endif %}" href="/">Home</a>
                         </li>
+                        {% if session.get('role') == 'admin' %}
                         <li class="nav-item">
-                            <a class="nav-link {% if request.path == '/prediction' %}active{% endif %}" href="/prediction">Live Monitor</a>
+                            <a class="nav-link {% if request.path == '/admin' %}active{% endif %}" href="/admin">
+                                <i class="bi-speedometer2 me-1"></i> Admin Overview
+                            </a>
+                        </li>
+                        {% endif %}
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.path == '/prediction' %}active{% endif %}" href="/prediction">
+                                <i class="bi-activity me-1"></i> Live Monitor
+                            </a>
                         </li>
                         <li class="nav-item">
-                            <a class="nav-link {% if request.path == '/analysis' %}active{% endif %}" href="/analysis">Analysis</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.path == '/admin' %}active{% endif %}" href="/admin">Configuration</a>
+                            <a class="nav-link {% if request.path == '/analysis' %}active{% endif %}" href="/analysis">
+                                <i class="bi-graph-up me-1"></i> Analysis
+                            </a>
                         </li>
                     </ul>
 
-                    <div class="ms-4">
+                    <div class="ms-4 d-flex align-items-center gap-2">
                         {% if session.get('user') %}
-                            <a href="/logout" class="btn custom-btn custom-border-btn smoothscroll">Logout</a>
+                            <span class="badge {% if session.get('role') == 'admin' %}bg-info text-dark{% else %}bg-secondary{% endif %} px-2 py-1" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
+                                <i class="bi bi-person-fill"></i> {{ session.get('user') }} ({{ session.get('role', 'user') }})
+                            </span>
+                            <a href="/logout" class="btn custom-btn custom-border-btn smoothscroll" style="padding: 6px 18px; font-size: 13px;">Logout</a>
                         {% else %}
-                            <a href="/login" class="btn custom-btn custom-border-btn smoothscroll">Login</a>
+                            <a href="/login" class="btn custom-btn custom-border-btn smoothscroll" style="padding: 6px 18px; font-size: 13px;">Login</a>
                         {% endif %}
                     </div>
                 </div>

@@ -105,8 +105,13 @@
 
     <div class="register-box">
       <h2><i class="fa-solid fa-user-plus"></i> {{ APP_NAME }} Registration</h2>
+      {% if error %}
+      <div style="background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fca5a5; padding: 10px 14px; border-radius: 8px; margin-bottom: 1.2rem; font-size: 0.88rem; text-align: left;">
+        <i class="fa-solid fa-triangle-exclamation me-1"></i> {{ error }}
+      </div>
+      {% endif %}
       <form method="POST">
-        <!-- Dummy Fields (for display only) -->
+        <!-- Optional profile fields -->
         <div class="form-group">
           <label><i class="fa-solid fa-id-card"></i> Full Name</label>
           <input type="text" placeholder="John Doe" />
@@ -114,7 +119,7 @@
 
         <div class="form-group">
           <label><i class="fa-solid fa-envelope"></i> Email</label>
-          <input type="email" placeholder="example@mail.com" />
+          <input type="email" name="email" placeholder="example@mail.com" />
         </div>
 
         <div class="form-group">
@@ -146,6 +151,12 @@
       <p class="login-link">
         Already have an account? <a href="/login">Login here</a>
       </p>
+      <div style="margin-top: 1rem; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.8rem; font-size: 0.8rem; color: #888;">
+        <span style="color: #627196;"><i class="fa-solid fa-circle-info me-1"></i> New accounts receive standard User privileges.</span>
+        <div class="mt-2">
+          <a href="/" style="color: #00ccff; text-decoration: none;"><i class="fa-solid fa-arrow-left me-1"></i> Back to Welcome Page</a>
+        </div>
+      </div>
     </div>
   </div>
 

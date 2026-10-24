@@ -1,0 +1,2988 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{ APP_NAME }} | Enterprise SOC Overview</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap.min.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/bootstrap-icons.css') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-deep: #060812;
+            --bg-surface: #0a0f1d;
+            --bg-surface-elevated: #11182c;
+            --bg-card: #0d1326;
+            --bg-card-hover: #121a33;
+            --border-dim: #19233c;
+            --border-bright: #27375e;
+            
+            --cyan-glow: #00d2ff;
+            --cyan-dim: rgba(0, 210, 255, 0.12);
+            --blue-glow: #0077ff;
+            --blue-dim: rgba(0, 119, 255, 0.12);
+            --red-glow: #ff3366;
+            --red-dim: rgba(255, 51, 102, 0.12);
+            --green-glow: #00e676;
+            --green-dim: rgba(0, 230, 118, 0.12);
+            --amber-glow: #ffb300;
+            --amber-dim: rgba(255, 179, 0, 0.12);
+            --purple-glow: #9d4edd;
+            --purple-dim: rgba(157, 78, 221, 0.12);
+
+            --text-primary: #f0f4fc;
+            --text-secondary: #9aa7c7;
+            --text-muted: #627196;
+            --font-mono: 'JetBrains Mono', monospace;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            background-color: var(--bg-deep);
+            color: var(--text-primary);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+
+        /* Layout */
+        .soc-wrapper {
+            display: flex;
+            min-height: 100vh;
+            position: relative;
+        }
+
+        /* CyNet-Style Sidebar */
+        .soc-sidebar {
+            width: 260px;
+            background: linear-gradient(180deg, #090e1a 0%, #060912 100%);
+            border-right: 1px solid var(--border-dim);
+            display: flex;
+            flex-direction: column;
+            position: fixed;
+            top: 0;
+            bottom: 0;
+            left: 0;
+            z-index: 1040;
+            padding: 18px 14px;
+            transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), left 0.25s ease;
+        }
+
+        .soc-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 8px 10px 18px;
+            border-bottom: 1px solid var(--border-dim);
+            margin-bottom: 14px;
+            text-decoration: none;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+
+        .soc-brand-icon {
+            width: 40px;
+            height: 40px;
+            min-width: 40px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, #00d2ff 0%, #7928ca 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 19px;
+            color: #fff;
+            box-shadow: 0 0 16px rgba(0, 210, 255, 0.45);
+        }
+
+        .soc-brand-text h5 {
+            margin: 0;
+            font-weight: 800;
+            font-size: 17px;
+            letter-spacing: 0.5px;
+            color: #fff;
+        }
+
+        .soc-brand-text span {
+            font-size: 10px;
+            color: var(--cyan-glow);
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            font-weight: 700;
+        }
+
+        /* Sidebar System Armed Badge */
+        .soc-system-badge {
+            margin-bottom: 14px;
+            padding: 7px 10px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            overflow: hidden;
+            white-space: nowrap;
+            transition: all 0.2s ease;
+        }
+
+        .soc-nav-heading {
+            font-size: 10.5px;
+            text-transform: uppercase;
+            letter-spacing: 1.4px;
+            color: var(--text-muted);
+            font-weight: 700;
+            margin: 14px 10px 6px;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .soc-nav {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .soc-nav-item a, .soc-nav-item button {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 9px 12px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            width: 100%;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+        }
+
+        .soc-nav-item a:hover, .soc-nav-item button:hover {
+            color: #fff;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .soc-nav-item.active a, .soc-nav-item.active button {
+            color: #fff;
+            background: linear-gradient(90deg, rgba(0, 210, 255, 0.18) 0%, rgba(0, 210, 255, 0.03) 100%);
+            border-left: 3px solid var(--cyan-glow);
+            font-weight: 600;
+        }
+
+        .soc-nav-item i {
+            font-size: 16px;
+            width: 20px;
+            min-width: 20px;
+            text-align: center;
+        }
+
+        .soc-sidebar-footer {
+            margin-top: auto;
+            padding-top: 14px;
+            border-top: 1px solid var(--border-dim);
+        }
+
+        .user-card {
+            background: var(--bg-surface-elevated);
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border-dim);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            overflow: hidden;
+            white-space: nowrap;
+        }
+
+        /* Main Content Viewport */
+        .soc-main {
+            margin-left: 260px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            transition: margin-left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            background-color: var(--bg-deep);
+        }
+
+        /* Collapsed Sidebar Styles */
+        body.sidebar-collapsed .soc-sidebar {
+            width: 72px;
+            padding: 18px 8px;
+        }
+
+        body.sidebar-collapsed .soc-main {
+            margin-left: 72px;
+        }
+
+        body.sidebar-collapsed .soc-brand {
+            justify-content: center;
+            padding: 8px 0 16px;
+        }
+
+        body.sidebar-collapsed .soc-brand-text,
+        body.sidebar-collapsed .soc-nav-heading,
+        body.sidebar-collapsed .soc-nav-item span,
+        body.sidebar-collapsed .soc-system-badge-text,
+        body.sidebar-collapsed .user-card-info {
+            display: none !important;
+        }
+
+        body.sidebar-collapsed .soc-system-badge {
+            justify-content: center;
+            padding: 8px 0;
+        }
+
+        body.sidebar-collapsed .soc-nav-item a,
+        body.sidebar-collapsed .soc-nav-item button {
+            justify-content: center;
+            padding: 10px 0;
+            gap: 0;
+        }
+
+        body.sidebar-collapsed .soc-nav-item i {
+            font-size: 18px;
+            width: auto;
+        }
+
+        body.sidebar-collapsed .user-card {
+            justify-content: center;
+            padding: 8px 0;
+        }
+
+        /* Mobile Off-Canvas Drawer */
+        .soc-backdrop {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(4px);
+            z-index: 1035;
+        }
+
+        @media (max-width: 991.98px) {
+            .soc-sidebar {
+                left: -280px;
+                width: 260px;
+            }
+            .soc-sidebar.mobile-open {
+                left: 0;
+                box-shadow: 10px 0 30px rgba(0, 0, 0, 0.8);
+            }
+            .soc-main {
+                margin-left: 0 !important;
+            }
+            .soc-backdrop.show {
+                display: block;
+            }
+        }
+
+        /* Topbar */
+        .soc-topbar {
+            background: rgba(10, 15, 29, 0.9);
+            backdrop-filter: blur(14px);
+            border-bottom: 1px solid var(--border-dim);
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 1020;
+        }
+
+        .soc-topbar-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .sidebar-toggle-btn {
+            background: var(--bg-surface-elevated);
+            border: 1px solid var(--border-dim);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            padding: 7px 11px;
+            font-size: 14px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .sidebar-toggle-btn:hover {
+            color: #fff;
+            border-color: var(--cyan-glow);
+            box-shadow: 0 0 10px rgba(0, 210, 255, 0.3);
+        }
+
+        .soc-telemetry-pills {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .tele-pill {
+            background: var(--bg-deep);
+            border: 1px solid var(--border-dim);
+            border-radius: 20px;
+            padding: 4px 12px;
+            font-size: 11.5px;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .tele-pill .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+        }
+
+        /* Glowing dots & Pulses */
+        .dot-green { background: var(--green-glow); box-shadow: 0 0 8px var(--green-glow); }
+        .dot-cyan { background: var(--cyan-glow); box-shadow: 0 0 8px var(--cyan-glow); }
+        .dot-red { background: var(--red-glow); box-shadow: 0 0 8px var(--red-glow); }
+        .dot-purple { background: var(--purple-glow); box-shadow: 0 0 8px var(--purple-glow); }
+        .dot-amber { background: var(--amber-glow); box-shadow: 0 0 8px var(--amber-glow); }
+
+        @keyframes socPulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.7); }
+            70% { transform: scale(1.05); box-shadow: 0 0 0 6px rgba(0, 230, 118, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(0, 230, 118, 0); }
+        }
+        .pulse-green { animation: socPulse 2s infinite; }
+
+        @keyframes socPulseRed {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 51, 102, 0.7); }
+            70% { transform: scale(1.05); box-shadow: 0 0 0 6px rgba(255, 51, 102, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(255, 51, 102, 0); }
+        }
+        .pulse-red { animation: socPulseRed 2s infinite; }
+
+        /* Content Body */
+        .soc-content {
+            padding: 24px 28px 60px;
+        }
+
+        /* Section Headings */
+        .section-header {
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .section-header h4 {
+            font-size: 19px;
+            font-weight: 700;
+            margin: 0;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Cards */
+        .soc-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-dim);
+            border-radius: 10px;
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.25s ease;
+            height: 100%;
+        }
+
+        .soc-card:hover {
+            border-color: var(--border-bright);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+        }
+
+        .kpi-card {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 18px 20px;
+            background: linear-gradient(180deg, #0e1428 0%, #0a0f1e 100%);
+        }
+
+        .kpi-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .kpi-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.9px;
+            color: var(--text-secondary);
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+
+        .kpi-value {
+            font-size: 30px;
+            font-weight: 800;
+            color: #fff;
+            font-family: var(--font-mono);
+            line-height: 1.1;
+            letter-spacing: -0.5px;
+        }
+
+        .kpi-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 19px;
+            border: 1px solid transparent;
+        }
+
+        .kpi-icon-blue { background: var(--cyan-dim); color: var(--cyan-glow); border-color: rgba(0, 210, 255, 0.25); }
+        .kpi-icon-red { background: var(--red-dim); color: var(--red-glow); border-color: rgba(255, 51, 102, 0.25); }
+        .kpi-icon-green { background: var(--green-dim); color: var(--green-glow); border-color: rgba(0, 230, 118, 0.25); }
+        .kpi-icon-purple { background: var(--purple-dim); color: var(--purple-glow); border-color: rgba(157, 78, 221, 0.25); }
+        .kpi-icon-amber { background: var(--amber-dim); color: var(--amber-glow); border-color: rgba(255, 179, 0, 0.25); }
+
+        .kpi-meta {
+            font-size: 11.5px;
+            color: var(--text-muted);
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        /* Severity Badges */
+        .badge-critical {
+            background: rgba(255, 51, 102, 0.18);
+            color: #ff3366;
+            border: 1px solid rgba(255, 51, 102, 0.45);
+            font-weight: 700;
+            font-size: 10.5px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            box-shadow: 0 0 8px rgba(255, 51, 102, 0.25);
+        }
+
+        .badge-high {
+            background: rgba(255, 132, 0, 0.18);
+            color: #ff8400;
+            border: 1px solid rgba(255, 132, 0, 0.45);
+            font-weight: 700;
+            font-size: 10.5px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-medium {
+            background: rgba(255, 204, 0, 0.18);
+            color: #ffcc00;
+            border: 1px solid rgba(255, 204, 0, 0.45);
+            font-weight: 700;
+            font-size: 10.5px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .badge-low {
+            background: rgba(0, 210, 255, 0.18);
+            color: #00d2ff;
+            border: 1px solid rgba(0, 210, 255, 0.45);
+            font-weight: 700;
+            font-size: 10.5px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Table Styling */
+        .soc-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 12.5px;
+        }
+
+        .soc-table th {
+            background: var(--bg-surface-elevated);
+            color: var(--text-secondary);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            font-size: 10.5px;
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border-dim);
+            border-top: 1px solid var(--border-dim);
+            white-space: nowrap;
+        }
+
+        .soc-table td {
+            padding: 11px 12px;
+            border-bottom: 1px solid rgba(30, 40, 66, 0.6);
+            color: var(--text-primary);
+            vertical-align: middle;
+        }
+
+        .soc-table tr:hover td {
+            background: rgba(255, 255, 255, 0.025);
+        }
+
+        .soc-table-container {
+            border: 1px solid var(--border-dim);
+            border-radius: 8px;
+            overflow: hidden;
+            background: var(--bg-card);
+        }
+
+        .soc-ip-cell {
+            font-family: var(--font-mono);
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .country-pill {
+            background: rgba(255, 255, 255, 0.07);
+            border-radius: 3px;
+            padding: 1px 6px;
+            font-size: 10px;
+            color: var(--text-secondary);
+            font-family: 'Inter', sans-serif;
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+        }
+
+        /* Mini progress bar for top sources/targets */
+        .soc-mini-bar {
+            height: 4px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 4px;
+        }
+        .soc-mini-bar-fill-red {
+            height: 100%;
+            background: linear-gradient(90deg, #ff3366, #ff6b8b);
+            border-radius: 2px;
+        }
+        .soc-mini-bar-fill-amber {
+            height: 100%;
+            background: linear-gradient(90deg, #ffb300, #ffd54f);
+            border-radius: 2px;
+        }
+
+        /* Health Status Grid */
+        .health-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-dim);
+            border-radius: 8px;
+            padding: 12px 14px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.2s ease;
+        }
+
+        .health-card:hover {
+            border-color: var(--border-bright);
+            background: var(--bg-card-hover);
+        }
+
+        .health-icon {
+            width: 36px;
+            height: 36px;
+            min-width: 36px;
+            border-radius: 8px;
+            background: var(--bg-deep);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 17px;
+        }
+
+        /* Empty / Loading States */
+        .soc-empty-state {
+            padding: 32px 16px;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        .soc-empty-state i {
+            font-size: 28px;
+            display: block;
+            margin-bottom: 8px;
+            opacity: 0.6;
+        }
+
+        /* Filter Controls */
+        .filter-control {
+            background: var(--bg-deep) !important;
+            border: 1px solid var(--border-dim) !important;
+            color: #fff !important;
+            border-radius: 6px;
+            font-size: 12.5px;
+            padding: 7px 11px;
+        }
+
+        .filter-control:focus {
+            border-color: var(--cyan-glow) !important;
+            box-shadow: 0 0 8px rgba(0, 210, 255, 0.25) !important;
+            outline: none;
+        }
+
+        /* Buttons */
+        .btn-cyan {
+            background: linear-gradient(135deg, #00d2ff 0%, #0088ff 100%);
+            color: #fff;
+            border: none;
+            font-weight: 600;
+            border-radius: 6px;
+            padding: 7px 16px;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-cyan:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 210, 255, 0.4);
+            color: #fff;
+        }
+
+        .btn-outline-soc {
+            background: transparent;
+            border: 1px solid var(--border-bright);
+            color: var(--text-secondary);
+            border-radius: 6px;
+            padding: 7px 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-outline-soc:hover {
+            border-color: var(--cyan-glow);
+            color: #fff;
+            background: rgba(0, 210, 255, 0.06);
+        }
+
+        /* Tabs logic */
+        .soc-tab-content {
+            display: none;
+        }
+
+        .soc-tab-content.active {
+            display: block;
+        }
+
+        /* Forms in Settings tab */
+        .settings-input {
+            background: var(--bg-deep) !important;
+            border: 1px solid var(--border-dim) !important;
+            color: #fff !important;
+            padding: 9px 12px;
+            border-radius: 6px;
+            width: 100%;
+            font-size: 13.5px;
+        }
+
+        .settings-input:focus {
+            border-color: var(--cyan-glow) !important;
+            outline: none;
+        }
+
+        .settings-input[readonly] {
+            background: #080b14 !important;
+            color: #7d8ea8 !important;
+        }
+
+        /* Pagination Buttons */
+        .pagination-btn {
+            background: var(--bg-surface-elevated);
+            border: 1px solid var(--border-dim);
+            color: var(--text-primary);
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .pagination-btn:hover:not(:disabled) {
+            border-color: var(--cyan-glow);
+            color: #fff;
+        }
+
+        .pagination-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        /* Spinner helper */
+        .spin {
+            animation: fa-spin 1s infinite linear;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Backdrop for mobile drawer -->
+<div class="soc-backdrop" id="socBackdrop" onclick="closeMobileSidebar()"></div>
+
+<div class="soc-wrapper" id="socWrapper">
+    <!-- CyNet-Style Sidebar -->
+    <aside class="soc-sidebar" id="socSidebar">
+        <a href="/admin" class="soc-brand" title="{{ APP_FULL_NAME }}">
+            <div class="soc-brand-icon">
+                <i class="bi bi-shield-lock-fill"></i>
+            </div>
+            <div class="soc-brand-text">
+                <h5>{{ APP_NAME }}</h5>
+                <span>Enterprise SOC</span>
+            </div>
+        </a>
+
+        <!-- System Online Badge -->
+        <div class="px-1 mb-2">
+            {% if config.status == 'ON' %}
+                <div class="soc-system-badge" style="background: rgba(0, 230, 118, 0.12); border: 1px solid rgba(0, 230, 118, 0.3);" title="System Armed: Live Inference Active">
+                    <span style="font-size: 11px; font-weight: 700; color: var(--green-glow); letter-spacing: 0.5px; display: inline-flex; align-items: center; gap: 6px;">
+                        <span class="dot dot-green pulse-green"></span>
+                        <span class="soc-system-badge-text">SYSTEM ARMED</span>
+                    </span>
+                    <span class="soc-system-badge-text" style="font-size: 9.5px; color: var(--text-muted);">LIVE</span>
+                </div>
+            {% else %}
+                <div class="soc-system-badge" style="background: rgba(255, 51, 102, 0.12); border: 1px solid rgba(255, 51, 102, 0.3);" title="System Offline: Standby Mode">
+                    <span style="font-size: 11px; font-weight: 700; color: var(--red-glow); letter-spacing: 0.5px; display: inline-flex; align-items: center; gap: 6px;">
+                        <span class="dot dot-red pulse-red"></span>
+                        <span class="soc-system-badge-text">SYSTEM OFFLINE</span>
+                    </span>
+                    <span class="soc-system-badge-text" style="font-size: 9.5px; color: var(--text-muted);">STANDBY</span>
+                </div>
+            {% endif %}
+        </div>
+
+        <div class="soc-nav-heading">Operations</div>
+        <ul class="soc-nav">
+            <li class="soc-nav-item active" id="nav-overview">
+                <button onclick="switchTab('overview')" title="Admin Overview">
+                    <i class="bi bi-speedometer2"></i>
+                    <span>Admin Overview</span>
+                </button>
+            </li>
+            <li class="soc-nav-item">
+                <a href="/prediction" title="Live Network Monitor">
+                    <i class="bi bi-activity"></i>
+                    <span>Live Network Monitor</span>
+                </a>
+            </li>
+            <li class="soc-nav-item">
+                <a href="/analysis" title="Forensic Analytics">
+                    <i class="bi bi-pie-chart-fill"></i>
+                    <span>Forensic Analytics</span>
+                </a>
+            </li>
+        </ul>
+
+        <div class="soc-nav-heading">Investigation</div>
+        <ul class="soc-nav">
+            <li class="soc-nav-item" id="nav-explorer">
+                <button onclick="switchTab('explorer')" title="Historical Flow Explorer (133k+ Records)">
+                    <i class="bi bi-search"></i>
+                    <span>Flow Explorer (133k+)</span>
+                </button>
+            </li>
+            <li class="soc-nav-item">
+                <a href="/download_logs" title="Export Attack Logs (CSV)">
+                    <i class="bi bi-file-earmark-arrow-down-fill"></i>
+                    <span>Export Attack Logs</span>
+                </a>
+            </li>
+        </ul>
+
+        <div class="soc-nav-heading">Configuration</div>
+        <ul class="soc-nav">
+            <li class="soc-nav-item" id="nav-settings">
+                <button onclick="switchTab('settings')" title="Node & Firewall Rules">
+                    <i class="bi bi-sliders"></i>
+                    <span>Node & Firewall</span>
+                </button>
+            </li>
+            <li class="soc-nav-item" id="nav-subscribers">
+                <button onclick="switchTab('subscribers')" title="Email Alert Subscribers">
+                    <i class="bi bi-bell-fill"></i>
+                    <span>Email Subscribers</span>
+                </button>
+            </li>
+        </ul>
+
+        <div class="soc-sidebar-footer">
+            <div class="user-card">
+                <div class="user-card-info">
+                    <div style="font-size: 12.5px; font-weight: 600; color: #fff; text-overflow: ellipsis; overflow: hidden; max-width: 150px;">{{ user }}</div>
+                    <span style="font-size: 10px; color: var(--cyan-glow); font-weight: 700; text-transform: uppercase;">Administrator</span>
+                </div>
+                <a href="/logout" title="Sign Out" style="color: var(--text-muted); font-size: 16px;">
+                    <i class="bi bi-box-arrow-right"></i>
+                </a>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Workspace -->
+    <main class="soc-main">
+        <!-- Top Command Bar -->
+        <header class="soc-topbar">
+            <div class="soc-topbar-left">
+                <button class="sidebar-toggle-btn" id="sidebarToggleBtn" onclick="toggleSidebar()" title="Toggle Sidebar">
+                    <i class="bi bi-layout-sidebar"></i>
+                </button>
+                <div>
+                    <span style="font-size: 10.5px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 1px;">Security Command Center</span>
+                    <h5 style="margin: 0; font-weight: 700; color: #fff; font-size: 16px;">{{ APP_FULL_NAME }}</h5>
+                </div>
+            </div>
+
+            <div class="soc-telemetry-pills d-none d-xl-flex">
+                <div class="tele-pill">
+                    <span class="dot dot-green pulse-green"></span>
+                    <span style="color: var(--text-secondary);">Flask Engine:</span>
+                    <strong style="color: #fff;">Operational</strong>
+                </div>
+                <div class="tele-pill">
+                    <span class="dot dot-cyan"></span>
+                    <span style="color: var(--text-secondary);">Avg Latency:</span>
+                    <strong style="color: #fff;" id="topbar-latency">35.1 ms</strong>
+                </div>
+                <div class="tele-pill">
+                    <span class="dot dot-green"></span>
+                    <span style="color: var(--text-secondary);">SQLite DB:</span>
+                    <strong style="color: #fff;" id="topbar-total-flows">{{ "{:,}".format(overview.summary.total_flows) }} Flows</strong>
+                </div>
+                <div class="tele-pill">
+                    <span class="dot dot-purple"></span>
+                    <span style="color: var(--text-secondary);">Critical Threats:</span>
+                    <strong style="color: #c77dff;" id="topbar-critical-threats">{{ "{:,}".format(overview.summary.critical_detections) }}</strong>
+                </div>
+            </div>
+
+            <div class="d-flex align-items-center gap-2">
+                <button class="btn btn-outline-soc btn-sm" id="btnRefreshOverview" onclick="refreshOverviewTelemetry()" title="Refresh Dashboard Telemetry">
+                    <i class="bi bi-arrow-clockwise" id="refreshIcon"></i> <span class="d-none d-sm-inline">Refresh</span>
+                </button>
+                <a href="/prediction" class="btn btn-cyan btn-sm">
+                    <i class="bi bi-broadcast me-1"></i> <span class="d-none d-sm-inline">Live Stream</span>
+                </a>
+            </div>
+        </header>
+
+        <!-- Content Area -->
+        <div class="soc-content">
+
+            <!-- ========================================================= -->
+            <!-- TAB 1: ADMIN OVERVIEW DASHBOARD -->
+            <!-- ========================================================= -->
+            <div id="tab-overview" class="soc-tab-content active">
+
+                <!-- Section 1: Summary KPI Cards -->
+                <div class="row g-3 mb-4">
+                    <!-- Total Processed Flows -->
+                    <div class="col-xl col-md-6">
+                        <div class="soc-card kpi-card" style="border-top: 2px solid var(--cyan-glow);">
+                            <div class="kpi-top">
+                                <div>
+                                    <div class="kpi-title">Total Processed Flows</div>
+                                    <div class="kpi-value" id="kpi-total-flows">{{ "{:,}".format(overview.summary.total_flows) }}</div>
+                                </div>
+                                <div class="kpi-icon kpi-icon-blue">
+                                    <i class="bi bi-hdd-network-fill"></i>
+                                </div>
+                            </div>
+                            <div class="kpi-meta">
+                                <i class="bi bi-database-check text-info"></i> Full persistent SQLite dataset
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Malicious Traffic -->
+                    <div class="col-xl col-md-6">
+                        <div class="soc-card kpi-card" style="border-top: 2px solid var(--red-glow); border-left: 3px solid var(--red-glow);">
+                            <div class="kpi-top">
+                                <div>
+                                    <div class="kpi-title">Malicious Traffic</div>
+                                    <div class="kpi-value" id="kpi-malicious-flows" style="color: var(--red-glow);">{{ "{:,}".format(overview.summary.malicious_flows) }}</div>
+                                </div>
+                                <div class="kpi-icon kpi-icon-red">
+                                    <i class="bi bi-shield-slash-fill"></i>
+                                </div>
+                            </div>
+                            <div class="kpi-meta text-danger">
+                                <i class="bi bi-arrow-up-right"></i> <span id="kpi-malicious-pct">{{ overview.summary.malicious_pct }}</span>% of all monitored flows
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Benign Baseline -->
+                    <div class="col-xl col-md-6">
+                        <div class="soc-card kpi-card" style="border-top: 2px solid var(--green-glow); border-left: 3px solid var(--green-glow);">
+                            <div class="kpi-top">
+                                <div>
+                                    <div class="kpi-title">Benign Baseline</div>
+                                    <div class="kpi-value" id="kpi-benign-flows" style="color: var(--green-glow);">{{ "{:,}".format(overview.summary.benign_flows) }}</div>
+                                </div>
+                                <div class="kpi-icon kpi-icon-green">
+                                    <i class="bi bi-check-circle-fill"></i>
+                                </div>
+                            </div>
+                            <div class="kpi-meta text-success">
+                                <i class="bi bi-shield-check"></i> <span id="kpi-benign-pct">{{ overview.summary.benign_pct }}</span>% verified legitimate
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Critical Detections -->
+                    <div class="col-xl col-md-6">
+                        <div class="soc-card kpi-card" style="border-top: 2px solid var(--purple-glow); border-left: 3px solid var(--purple-glow);">
+                            <div class="kpi-top">
+                                <div>
+                                    <div class="kpi-title">Critical Severity</div>
+                                    <div class="kpi-value" id="kpi-critical-detections" style="color: #c77dff;">{{ "{:,}".format(overview.summary.critical_detections) }}</div>
+                                </div>
+                                <div class="kpi-icon kpi-icon-purple">
+                                    <i class="bi bi-exclamation-octagon-fill"></i>
+                                </div>
+                            </div>
+                            <div class="kpi-meta" style="color: #c77dff;">
+                                <i class="bi bi-lightning-fill"></i> Composite Score &ge; 0.90
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Active Open Incidents -->
+                    <div class="col-xl col-md-6">
+                        <div class="soc-card kpi-card" style="border-top: 2px solid var(--amber-glow); border-left: 3px solid var(--amber-glow);">
+                            <div class="kpi-top">
+                                <div>
+                                    <div class="kpi-title">Active Open Incidents</div>
+                                    <div class="kpi-value" id="kpi-open-alerts" style="color: var(--amber-glow);">{{ overview.summary.open_alerts }}</div>
+                                </div>
+                                <div class="kpi-icon kpi-icon-amber">
+                                    <i class="bi bi-bell-fill"></i>
+                                </div>
+                            </div>
+                            <div class="kpi-meta text-warning">
+                                <i class="bi bi-broadcast"></i> Actively triaged by SOC
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 2: Detection Analytics (Charts) -->
+                <div class="row g-3 mb-4">
+                    <!-- Donut Chart: Benign vs Malicious -->
+                    <div class="col-lg-4">
+                        <div class="soc-card">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="m-0 fw-bold" style="font-size: 13.5px; text-transform: uppercase; letter-spacing: 0.5px;">Traffic Composition</h6>
+                                <span class="badge bg-secondary" style="font-size: 10px;">Ensemble Classification</span>
+                            </div>
+                            <div style="height: 230px; position: relative;" id="trafficCompositionContainer">
+                                <canvas id="trafficCompositionChart"></canvas>
+                            </div>
+                            <div class="d-flex justify-content-around mt-3 pt-2 border-top border-secondary border-opacity-25 text-center">
+                                <div>
+                                    <span style="font-size: 11px; color: var(--text-muted); display: block;">Benign Flows</span>
+                                    <strong id="label-benign-pct" style="color: var(--green-glow); font-family: var(--font-mono);">{{ overview.summary.benign_pct }}%</strong>
+                                </div>
+                                <div>
+                                    <span style="font-size: 11px; color: var(--text-muted); display: block;">Malicious Flows</span>
+                                    <strong id="label-malicious-pct" style="color: var(--red-glow); font-family: var(--font-mono);">{{ overview.summary.malicious_pct }}%</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Area/Bar Timeline: Attack Activity Over Time -->
+                    <div class="col-lg-5">
+                        <div class="soc-card">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="m-0 fw-bold" style="font-size: 13.5px; text-transform: uppercase; letter-spacing: 0.5px;">Threat Activity Over Time</h6>
+                                <span class="badge bg-danger bg-opacity-25 text-danger border border-danger border-opacity-25" style="font-size: 10px;">Hourly Distribution</span>
+                            </div>
+                            <div style="height: 270px; position: relative;" id="attackTimelineContainer">
+                                <canvas id="attackTimelineChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Horizontal Bar: Threat Classification Distribution -->
+                    <div class="col-lg-3">
+                        <div class="soc-card">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="m-0 fw-bold" style="font-size: 13.5px; text-transform: uppercase; letter-spacing: 0.5px;">Threat Signatures</h6>
+                                <span class="badge bg-info bg-opacity-25 text-info border border-info border-opacity-25" style="font-size: 10px;">Classification</span>
+                            </div>
+                            <div style="height: 270px; position: relative;" id="classificationContainer">
+                                <canvas id="classificationChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 3: Network Threat Intelligence -->
+                <div class="row g-3 mb-4">
+                    <!-- Top Attacking Source IPs -->
+                    <div class="col-lg-4">
+                        <div class="soc-card">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="m-0 fw-bold" style="font-size: 13.5px; text-transform: uppercase; letter-spacing: 0.5px;">Top Attacking Source IPs</h6>
+                                <i class="bi bi-geo-alt-fill text-danger"></i>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="soc-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Source IP & Location</th>
+                                            <th class="text-end">Attacks</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="top-sources-tbody">
+                                        {% if overview.top_sources and overview.top_sources|length > 0 %}
+                                            {% set max_src = overview.top_sources[0].count %}
+                                            {% for item in overview.top_sources %}
+                                            <tr>
+                                                <td>
+                                                    <div class="soc-ip-cell">
+                                                        <i class="bi bi-shield-x text-danger"></i>
+                                                        <span>{{ item.ip }}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span class="country-pill"><i class="bi bi-globe"></i> {{ item.country }}</span>
+                                                    </div>
+                                                    <div class="soc-mini-bar">
+                                                        <div class="soc-mini-bar-fill-red" style="width: {{ (item.count / max_src * 100)|round }}%;"></div>
+                                                    </div>
+                                                </td>
+                                                <td class="text-end fw-bold font-monospace" style="color: var(--red-glow); vertical-align: middle;">
+                                                    {{ "{:,}".format(item.count) }}
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        {% else %}
+                                            <tr>
+                                                <td colspan="2" class="soc-empty-state">
+                                                    <i class="bi bi-shield-check text-success"></i>
+                                                    No attacking sources recorded in telemetry.
+                                                </td>
+                                            </tr>
+                                        {% endif %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Top Targeted Destination IPs -->
+                    <div class="col-lg-4">
+                        <div class="soc-card">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="m-0 fw-bold" style="font-size: 13.5px; text-transform: uppercase; letter-spacing: 0.5px;">Top Targeted Nodes</h6>
+                                <i class="bi bi-bullseye text-warning"></i>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="soc-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Destination IP</th>
+                                            <th class="text-end">Inbound Attacks</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="top-targets-tbody">
+                                        {% if overview.top_targets and overview.top_targets|length > 0 %}
+                                            {% set max_tgt = overview.top_targets[0].count %}
+                                            {% for item in overview.top_targets %}
+                                            <tr>
+                                                <td>
+                                                    <div class="soc-ip-cell">
+                                                        <i class="bi bi-hdd-network text-info"></i>
+                                                        <span>{{ item.ip }}</span>
+                                                    </div>
+                                                    <div class="text-muted" style="font-size: 10px;">Primary Target Host</div>
+                                                    <div class="soc-mini-bar">
+                                                        <div class="soc-mini-bar-fill-amber" style="width: {{ (item.count / max_tgt * 100)|round }}%;"></div>
+                                                    </div>
+                                                </td>
+                                                <td class="text-end fw-bold font-monospace" style="color: var(--amber-glow); vertical-align: middle;">
+                                                    {{ "{:,}".format(item.count) }}
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        {% else %}
+                                            <tr>
+                                                <td colspan="2" class="soc-empty-state">
+                                                    <i class="bi bi-check2-circle text-success"></i>
+                                                    No targeted destination hosts detected.
+                                                </td>
+                                            </tr>
+                                        {% endif %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Destination Port Distribution -->
+                    <div class="col-lg-4">
+                        <div class="soc-card">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h6 class="m-0 fw-bold" style="font-size: 13.5px; text-transform: uppercase; letter-spacing: 0.5px;">Target Port Distribution</h6>
+                                <i class="bi bi-diagram-3-fill text-info"></i>
+                            </div>
+                            <div style="height: 250px; position: relative;" id="portDistributionContainer">
+                                <canvas id="portDistributionChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 4: System Health Status Grid -->
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h6 class="m-0 fw-bold" style="font-size: 13.5px; text-transform: uppercase; letter-spacing: 0.5px;">
+                            <i class="bi bi-heart-pulse-fill text-danger me-2"></i> Infrastructure & Model Health Status
+                        </h6>
+                        <span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-25" style="font-size: 11px;">
+                            <span class="dot dot-green pulse-green d-inline-block me-1"></span> All Systems Operational
+                        </span>
+                    </div>
+
+                    <div class="row g-3">
+                        <!-- Backend -->
+                        <div class="col-lg-4 col-md-6">
+                            <div class="health-card">
+                                <div class="health-icon" style="color: var(--cyan-glow); border: 1px solid rgba(0, 210, 255, 0.3);">
+                                    <i class="bi bi-server"></i>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div class="d-flex justify-content-between">
+                                        <strong style="font-size: 12.5px; color: #fff;">Flask Web Backend</strong>
+                                        <span class="badge bg-success" style="font-size: 9.5px;">Operational</span>
+                                    </div>
+                                    <div style="font-size: 11px; color: var(--text-muted);">{{ overview.system_health.backend.version }}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Database -->
+                        <div class="col-lg-4 col-md-6">
+                            <div class="health-card">
+                                <div class="health-icon" style="color: var(--green-glow); border: 1px solid rgba(0, 230, 118, 0.3);">
+                                    <i class="bi bi-database-check"></i>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div class="d-flex justify-content-between">
+                                        <strong style="font-size: 12.5px; color: #fff;">SQLite Storage Engine</strong>
+                                        <span class="badge bg-success" style="font-size: 9.5px;">Connected</span>
+                                    </div>
+                                    <div style="font-size: 11px; color: var(--text-muted);">{{ overview.system_health.database.info }}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Random Forest -->
+                        <div class="col-lg-4 col-md-6">
+                            <div class="health-card">
+                                <div class="health-icon" style="color: #c77dff; border: 1px solid rgba(199, 125, 255, 0.3);">
+                                    <i class="bi bi-cpu-fill"></i>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div class="d-flex justify-content-between">
+                                        <strong style="font-size: 12.5px; color: #fff;">Random Forest (Supervised)</strong>
+                                        <span class="badge bg-info text-dark" style="font-size: 9.5px;">Loaded</span>
+                                    </div>
+                                    <div style="font-size: 11px; color: var(--text-muted);">{{ overview.system_health.random_forest.info }}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Isolation Forest -->
+                        <div class="col-lg-4 col-md-6">
+                            <div class="health-card">
+                                <div class="health-icon" style="color: var(--cyan-glow); border: 1px solid rgba(0, 210, 255, 0.3);">
+                                    <i class="bi bi-node-plus-fill"></i>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div class="d-flex justify-content-between">
+                                        <strong style="font-size: 12.5px; color: #fff;">Isolation Forest (Anomaly)</strong>
+                                        <span class="badge bg-info text-dark" style="font-size: 9.5px;">Loaded</span>
+                                    </div>
+                                    <div style="font-size: 11px; color: var(--text-muted);">{{ overview.system_health.isolation_forest.info }}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- WebSocket -->
+                        <div class="col-lg-4 col-md-6">
+                            <div class="health-card">
+                                <div class="health-icon" style="color: var(--amber-glow); border: 1px solid rgba(255, 179, 0, 0.3);">
+                                    <i class="bi bi-broadcast"></i>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div class="d-flex justify-content-between">
+                                        <strong style="font-size: 12.5px; color: #fff;">SocketIO Streaming Engine</strong>
+                                        <span class="badge bg-success" style="font-size: 9.5px;">Active</span>
+                                    </div>
+                                    <div style="font-size: 11px; color: var(--text-muted);">{{ overview.system_health.websocket.info }}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- SMTP Gateway -->
+                        <div class="col-lg-4 col-md-6">
+                            <div class="health-card">
+                                <div class="health-icon" style="color: var(--red-glow); border: 1px solid rgba(255, 51, 102, 0.3);">
+                                    <i class="bi bi-envelope-check-fill"></i>
+                                </div>
+                                <div style="flex: 1;">
+                                    <div class="d-flex justify-content-between">
+                                        <strong style="font-size: 12.5px; color: #fff;">SMTP Alert Gateway</strong>
+                                        <span class="badge bg-success" style="font-size: 9.5px;">Ready</span>
+                                    </div>
+                                    <div style="font-size: 11px; color: var(--text-muted);">{{ overview.system_health.smtp_gateway.info }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Section 5: Recent Security Alerts (Live Table) -->
+                <div class="soc-card mb-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                        <div>
+                            <h6 class="m-0 fw-bold" style="font-size: 14.5px; text-transform: uppercase; letter-spacing: 0.5px;">
+                                <i class="bi bi-exclamation-triangle-fill text-danger me-2"></i> Recent Security Incidents & Alerts
+                            </h6>
+                            <small class="text-muted">Direct telemetry stream from malicious flow detections</small>
+                        </div>
+                        <button class="btn btn-outline-soc btn-sm" onclick="switchTab('explorer')">
+                            <i class="bi bi-search me-1"></i> Open Flow Explorer
+                        </button>
+                    </div>
+
+                    <div class="table-responsive soc-table-container">
+                        <table class="soc-table">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Source IP & Location</th>
+                                    <th>Target IP</th>
+                                    <th>Port & Proto</th>
+                                    <th>Threat Signature</th>
+                                    <th>Score</th>
+                                    <th>Severity Badge</th>
+                                    <th>Latency</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recent-alerts-tbody">
+                                {% if overview.recent_alerts and overview.recent_alerts|length > 0 %}
+                                    {% for alert in overview.recent_alerts %}
+                                    <tr>
+                                        <td class="font-monospace" style="font-size: 11.5px; color: var(--text-secondary);">
+                                            {{ alert.timestamp_formatted }}
+                                        </td>
+                                        <td>
+                                            <div class="soc-ip-cell">
+                                                <i class="bi bi-shield-x text-danger"></i>
+                                                <span>{{ alert.src_ip }}</span>
+                                            </div>
+                                            <div><span class="country-pill"><i class="bi bi-globe"></i> {{ alert.country }}</span></div>
+                                        </td>
+                                        <td class="font-monospace" style="font-size: 12px;">{{ alert.dst_ip }}</td>
+                                        <td>
+                                            <span class="badge bg-secondary" style="font-size: 9.5px;">{{ alert.protocol }}</span>
+                                            <span class="font-monospace ms-1" style="font-size: 11px;">:{{ alert.dst_port }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="text-danger fw-semibold" style="font-size: 12px;">{{ alert.reason }}</span>
+                                        </td>
+                                        <td class="font-monospace fw-bold" style="font-size: 12.5px;">
+                                            {{ alert.score }}
+                                        </td>
+                                        <td>
+                                            <span class="{{ alert.severity_class }}">{{ alert.severity }}</span>
+                                        </td>
+                                        <td class="font-monospace text-muted" style="font-size: 11px;">
+                                            {{ alert.latency_ms }} ms
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-danger bg-opacity-25 text-danger border border-danger border-opacity-25" style="font-size: 9.5px;">
+                                                <i class="bi bi-radioactive"></i> Active Incident
+                                            </span>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td colspan="9" class="soc-empty-state">
+                                            <i class="bi bi-shield-check text-success"></i>
+                                            No active security incidents detected. Network traffic is within safe parameters.
+                                        </td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- ========================================================= -->
+            <!-- TAB 2: HISTORICAL FLOW EXPLORER (133,000+ RECORDS) -->
+            <!-- ========================================================= -->
+            <div id="tab-explorer" class="soc-tab-content">
+                <div class="section-header">
+                    <div>
+                        <h4><i class="bi bi-search text-info"></i> Historical Network Flow Explorer</h4>
+                        <small class="text-muted">High-performance server-side SQLite pagination across 133,000+ persistent flow records</small>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-outline-soc btn-sm" onclick="exportFilteredCsv()">
+                            <i class="bi bi-download me-1"></i> Export Query to CSV
+                        </button>
+                        <button class="btn btn-cyan btn-sm" onclick="loadHistoricalFlows(1)">
+                            <i class="bi bi-arrow-clockwise me-1"></i> Run Query
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Filter Controls Bar -->
+                <div class="soc-card mb-4" style="background: var(--bg-surface);">
+                    <div class="row g-3 align-items-end">
+                        <div class="col-lg-2 col-md-4">
+                            <label class="form-label text-muted" style="font-size: 11px; text-transform: uppercase;">Source IP</label>
+                            <input type="text" id="filter-src-ip" class="form-control filter-control" placeholder="e.g. 192.168.1.">
+                        </div>
+
+                        <div class="col-lg-2 col-md-4">
+                            <label class="form-label text-muted" style="font-size: 11px; text-transform: uppercase;">Destination IP</label>
+                            <input type="text" id="filter-dst-ip" class="form-control filter-control" placeholder="e.g. 10.0.0.1">
+                        </div>
+
+                        <div class="col-lg-2 col-md-4">
+                            <label class="form-label text-muted" style="font-size: 11px; text-transform: uppercase;">Classification</label>
+                            <select id="filter-label" class="form-select filter-control">
+                                <option value="">All Traffic Types</option>
+                                <option value="attack">Attack Only (Label 1)</option>
+                                <option value="benign">Benign Only (Label 0)</option>
+                            </select>
+                        </div>
+
+                        <div class="col-lg-2 col-md-4">
+                            <label class="form-label text-muted" style="font-size: 11px; text-transform: uppercase;">Severity Tier</label>
+                            <select id="filter-severity" class="form-select filter-control">
+                                <option value="">All Severities</option>
+                                <option value="critical">Critical (&ge; 0.90)</option>
+                                <option value="high">High (0.70 - 0.89)</option>
+                                <option value="medium">Medium (0.50 - 0.69)</option>
+                                <option value="low">Low (&lt; 0.50)</option>
+                            </select>
+                        </div>
+
+                        <div class="col-lg-2 col-md-4">
+                            <label class="form-label text-muted" style="font-size: 11px; text-transform: uppercase;">Sort Order</label>
+                            <select id="filter-sort" class="form-select filter-control">
+                                <option value="ts-DESC">Timestamp (Newest)</option>
+                                <option value="ts-ASC">Timestamp (Oldest)</option>
+                                <option value="attack_score-DESC">Score (Highest)</option>
+                                <option value="attack_score-ASC">Score (Lowest)</option>
+                                <option value="latency_ms-DESC">Latency (Slowest)</option>
+                            </select>
+                        </div>
+
+                        <div class="col-lg-2 col-md-4 d-flex gap-2">
+                            <button class="btn btn-cyan w-100" onclick="loadHistoricalFlows(1)">
+                                <i class="bi bi-funnel-fill"></i> Filter
+                            </button>
+                            <button class="btn btn-outline-soc" onclick="resetExplorerFilters()" title="Reset Filters">
+                                <i class="bi bi-x-circle"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Explorer Table -->
+                <div class="soc-card mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                        <span id="explorer-counts" class="text-muted" style="font-size: 12.5px;">Loading telemetry...</span>
+                        <div class="d-flex align-items-center gap-2">
+                            <label class="text-muted" style="font-size: 11.5px;">Per Page:</label>
+                            <select id="explorer-per-page" class="form-select filter-control" style="width: 80px; padding: 4px 8px; font-size: 12px;" onchange="loadHistoricalFlows(1)">
+                                <option value="25">25</option>
+                                <option value="50" selected>50</option>
+                                <option value="100">100</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive soc-table-container">
+                        <table class="soc-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Timestamp</th>
+                                    <th>Source IP &amp; Location</th>
+                                    <th>Destination IP</th>
+                                    <th>Port &amp; Proto</th>
+                                    <th>Classification</th>
+                                    <th>Reason / Signature</th>
+                                    <th>Score</th>
+                                    <th>Severity Badge</th>
+                                    <th>Latency</th>
+                                    <th class="text-end">MLOps Audit</th>
+                                </tr>
+                            </thead>
+                            <tbody id="explorer-tbody">
+                                <tr>
+                                    <td colspan="11" class="text-center py-4 text-muted">
+                                        <i class="bi bi-hourglass-split fa-spin me-2"></i> Querying indexed database records...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <!-- Pagination Controls -->
+                    <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top border-secondary border-opacity-25 flex-wrap gap-2">
+                        <div class="text-muted" style="font-size: 12px;" id="pagination-info">
+                            Page 1 of 1
+                        </div>
+                        <div class="d-flex gap-1" id="pagination-buttons">
+                            <button class="pagination-btn" id="btn-prev-page" onclick="prevPage()"><i class="bi bi-chevron-left"></i> Previous</button>
+                            <button class="pagination-btn" id="btn-next-page" onclick="nextPage()">Next <i class="bi bi-chevron-right"></i></button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================================= -->
+            <!-- TAB 3: NODE CONFIGURATION & FIREWALL -->
+            <!-- ========================================================= -->
+            <div id="tab-settings" class="soc-tab-content">
+                <div class="section-header">
+                    <div>
+                        <h4><i class="bi bi-sliders text-cyan"></i> Gateway Node & Firewall Configuration</h4>
+                        <small class="text-muted">Manage network node telemetry identity, policy filters, and intrusion alert thresholds</small>
+                    </div>
+                </div>
+
+                <form method="POST">
+                    <div class="row g-4 mb-4">
+                        <!-- Node Identity Card -->
+                        <div class="col-lg-6">
+                            <div class="soc-card">
+                                <div class="d-flex align-items-center gap-3 mb-4">
+                                    <div class="kpi-icon kpi-icon-blue">
+                                        <i class="bi bi-hdd-rack-fill"></i>
+                                    </div>
+                                    <div>
+                                        <h5 class="m-0 fw-bold text-white">Node Identity</h5>
+                                        <small class="text-muted">Gateway name and auto-discovered network coordinates</small>
+                                    </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label text-muted" style="font-size: 11px; text-transform: uppercase;">Monitored Node Name</label>
+                                    <input type="text" name="device_name" class="settings-input" value="{{ config.device_name }}" required>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label text-muted" style="font-size: 11px; text-transform: uppercase;">IP Address (Auto-Detected)</label>
+                                    <input type="text" class="settings-input" value="{{ config.ip_address }}" readonly>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label text-muted" style="font-size: 11px; text-transform: uppercase;">Admin Email (Real-Time Alerts)</label>
+                                    <div class="d-flex gap-2">
+                                        <input type="email" id="admin_email_input" name="admin_email" class="settings-input" value="{{ config.admin_email }}" placeholder="admin@domain.com">
+                                        <button type="button" id="btnTestEmail" class="btn btn-outline-soc text-nowrap">
+                                            <i class="fa fa-paper-plane me-1"></i> Test Email
+                                        </button>
+                                    </div>
+                                    <small id="emailStatusMsg" class="d-block mt-2 text-muted">
+                                        <i class="bi bi-envelope-fill me-1"></i> Intrusion and DDoS alerts will be dispatched here.
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Security Protocols Card -->
+                        <div class="col-lg-6">
+                            <div class="soc-card">
+                                <div class="d-flex align-items-center gap-3 mb-4">
+                                    <div class="kpi-icon kpi-icon-purple">
+                                        <i class="bi bi-shield-shaded"></i>
+                                    </div>
+                                    <div>
+                                        <h5 class="m-0 fw-bold text-white">Security & Rule Policies</h5>
+                                        <small class="text-muted">Dynamic packet filters and anomaly rejection policies</small>
+                                    </div>
+                                </div>
+
+                                <!-- IPv4 -->
+                                <div class="p-3 mb-3 rounded" style="background: var(--bg-surface); border: 1px solid var(--border-dim); display: flex; align-items: center; justify-content: space-between;">
+                                    <div>
+                                        <h6 class="m-0 fw-bold text-white">IPv4 Inspection</h6>
+                                        <small class="text-muted">Analyze standard Internet Protocol v4 packet headers</small>
+                                    </div>
+                                    <div class="form-check form-switch m-0">
+                                        <input class="form-check-input" type="checkbox" name="ipv4" style="cursor: pointer;" {% if config.ipv4_enabled %}checked{% endif %}>
+                                    </div>
+                                </div>
+
+                                <!-- TCP -->
+                                <div class="p-3 mb-3 rounded" style="background: var(--bg-surface); border: 1px solid var(--border-dim); display: flex; align-items: center; justify-content: space-between;">
+                                    <div>
+                                        <h6 class="m-0 fw-bold text-white">TCP Stream Analysis</h6>
+                                        <small class="text-muted">Inspect Transmission Control Protocol handshake flows</small>
+                                    </div>
+                                    <div class="form-check form-switch m-0">
+                                        <input class="form-check-input" type="checkbox" name="tcp" style="cursor: pointer;" {% if config.tcp_enabled %}checked{% endif %}>
+                                    </div>
+                                </div>
+
+                                <!-- SYN Flood -->
+                                <div class="p-3 mb-3 rounded" style="background: rgba(255, 51, 102, 0.08); border: 1px solid rgba(255, 51, 102, 0.3); display: flex; align-items: center; justify-content: space-between;">
+                                    <div>
+                                        <h6 class="m-0 fw-bold text-danger"><i class="bi bi-exclamation-triangle-fill me-1"></i> SYN Flood Guard</h6>
+                                        <small class="text-muted">Immediate high-priority alert on volumetric SYN anomalies</small>
+                                    </div>
+                                    <div class="form-check form-switch m-0">
+                                        <input class="form-check-input" type="checkbox" name="syn_flood" style="cursor: pointer;" {% if config.syn_flood_rule %}checked{% endif %}>
+                                    </div>
+                                </div>
+
+                                <!-- Active IPS Auto-Blocking -->
+                                <div class="p-3 mb-3 rounded" style="background: rgba(0, 229, 255, 0.06); border: 1px solid rgba(0, 229, 255, 0.25);">
+                                    <div class="d-flex align-items-center justify-content-between mb-2">
+                                        <div>
+                                            <h6 class="m-0 fw-bold text-cyan"><i class="bi bi-shield-slash-fill me-1"></i> Active IPS Auto-Blocking</h6>
+                                            <small class="text-muted">Automatically drop attacker packets via OS firewall when threat score exceeds threshold</small>
+                                        </div>
+                                        <div class="form-check form-switch m-0">
+                                            <input class="form-check-input" type="checkbox" name="ips_auto_block" style="cursor: pointer;" {% if config.ips_auto_block %}checked{% endif %}>
+                                        </div>
+                                    </div>
+                                    <div class="row g-2 mt-2 pt-2 border-top border-secondary">
+                                        <div class="col-sm-6">
+                                            <label class="form-label text-muted" style="font-size: 10px; text-transform: uppercase;">Block Trigger Threshold</label>
+                                            <select name="ips_block_threshold" class="settings-input" style="font-size: 12px; padding: 4px 8px;">
+                                                <option value="0.90" {% if config.ips_block_threshold == 0.90 %}selected{% endif %}>Critical Only (Score ≥ 0.90)</option>
+                                                <option value="0.70" {% if config.ips_block_threshold == 0.70 %}selected{% endif %}>High &amp; Critical (Score ≥ 0.70)</option>
+                                                <option value="0.50" {% if config.ips_block_threshold == 0.50 %}selected{% endif %}>All Malicious (Score ≥ 0.50)</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-sm-6">
+                                            <label class="form-label text-muted" style="font-size: 10px; text-transform: uppercase;">Quarantine Duration (Minutes)</label>
+                                            <input type="number" name="ips_block_duration" class="settings-input" style="font-size: 12px; padding: 4px 8px;" min="1" max="1440" value="{{ config.ips_block_duration or 15 }}">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Master Power Switch Card -->
+                    <div class="soc-card mb-4" style="background: var(--bg-surface);">
+                        <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="kpi-icon {% if config.status == 'ON' %}kpi-icon-green{% else %}kpi-icon-red{% endif %}">
+                                    <i class="bi bi-power"></i>
+                                </div>
+                                <div>
+                                    <h5 class="m-0 fw-bold text-white">Master Detection Engine Power</h5>
+                                    <small class="text-muted">Master enable/disable switch for Random Forest and Isolation Forest live inference</small>
+                                </div>
+                            </div>
+
+                            <div class="d-flex align-items-center gap-3">
+                                <div class="form-check form-switch m-0">
+                                    <input class="form-check-input" type="checkbox" name="device_status" style="transform: scale(1.4); cursor: pointer;" {% if config.status == 'ON' %}checked{% endif %}>
+                                </div>
+                                <button type="submit" class="btn btn-cyan px-4 py-2">
+                                    <i class="bi bi-check-lg me-1"></i> Save Configuration
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                <!-- Active Firewall Blocks & IP Quarantine Card -->
+                <div class="soc-card mb-4" id="ips-firewall-card">
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                        <div>
+                            <h5 class="fw-bold m-0 text-white"><i class="bi bi-shield-lock-fill text-cyan me-1"></i> Active Firewall Blocks &amp; IP Quarantine</h5>
+                            <small class="text-muted">Enforced at kernel/OS level via native firewall (Windows Netsh / Linux Iptables)</small>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-soc btn-sm" onclick="loadBlockedIps()">
+                                <i class="bi bi-arrow-clockwise"></i> Refresh Blocks
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Manual Quarantine Bar -->
+                    <div class="p-3 mb-3 rounded" style="background: rgba(255, 255, 255, 0.02); border: 1px dashed rgba(255, 255, 255, 0.12);">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-5">
+                                <label class="form-label text-muted" style="font-size: 11px; text-transform: uppercase;">Manual IP Quarantine</label>
+                                <input type="text" id="manual_block_ip" class="settings-input" placeholder="e.g. 192.168.1.105">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label text-muted" style="font-size: 11px; text-transform: uppercase;">Quarantine Reason</label>
+                                <input type="text" id="manual_block_reason" class="settings-input" placeholder="Manual Security Administrator Ban">
+                            </div>
+                            <div class="col-md-3">
+                                <button type="button" class="btn btn-danger btn-sm w-100 py-2" onclick="manuallyBlockIp()">
+                                    <i class="bi bi-ban me-1"></i> Quarantine IP
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-dark table-hover m-0" style="font-size: 13px;">
+                            <thead>
+                                <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                                    <th>Target Attacker IP</th>
+                                    <th>Incident Reason</th>
+                                    <th>Threat Score</th>
+                                    <th>Blocked At</th>
+                                    <th>Time Remaining</th>
+                                    <th>Status</th>
+                                    <th class="text-end">Firewall Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="blockedIpsBody">
+                                <tr>
+                                    <td colspan="7" class="text-center text-muted py-3">Loading active firewall rules...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ========================================================= -->
+            <!-- TAB 4: EMAIL ALERT SUBSCRIBERS -->
+            <!-- ========================================================= -->
+            <div id="tab-subscribers" class="soc-tab-content">
+                <div class="section-header">
+                    <div>
+                        <h4><i class="bi bi-bell-fill text-warning"></i> Incident Alert Subscribers</h4>
+                        <small class="text-muted">Stakeholders subscribed to receive real-time email incident reports</small>
+                    </div>
+                </div>
+
+                <div class="row g-4">
+                    <div class="col-lg-5">
+                        <div class="soc-card">
+                            <h5 class="fw-bold mb-3 text-white">Add New Subscriber</h5>
+                            <p class="text-muted" style="font-size: 13px;">
+                                Subscribed email addresses automatically receive an alert whenever an intrusion score exceeds policy thresholds.
+                            </p>
+
+                            <div class="mb-3">
+                                <label class="form-label text-muted" style="font-size: 11px; text-transform: uppercase;">Recipient Email Address</label>
+                                <input type="email" id="new_sub_email" class="settings-input" placeholder="analyst@soc.company.com">
+                            </div>
+
+                            <button type="button" class="btn btn-cyan w-100" onclick="addNewSubscriber()">
+                                <i class="bi bi-plus-circle-fill me-1"></i> Register Subscriber
+                            </button>
+                            <div id="subStatusMsg" class="mt-2" style="font-size: 12px;"></div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-7">
+                        <div class="soc-card">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="fw-bold m-0 text-white">Registered Distribution List</h5>
+                                <button class="btn btn-outline-soc btn-sm" onclick="loadSubscribers()">
+                                    <i class="bi bi-arrow-clockwise"></i> Refresh
+                                </button>
+                            </div>
+
+                            <div class="table-responsive soc-table-container">
+                                <table class="soc-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Recipient Email</th>
+                                            <th>Role / Type</th>
+                                            <th class="text-end">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="subscribers-tbody">
+                                        <tr>
+                                            <td colspan="3" class="text-center py-3 text-muted">Loading subscribers...</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Discord / Slack Webhook Incident Dispatch Card -->
+                <div class="soc-card mt-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                        <div>
+                            <h5 class="fw-bold m-0 text-white"><i class="bi bi-discord text-primary me-2"></i> Instant Incident Webhooks (Discord &amp; Slack)</h5>
+                            <small class="text-muted">Broadcast high-severity intrusion cards to security channels with zero email latency</small>
+                        </div>
+                        <span class="badge bg-dark border border-cyan text-cyan px-3 py-1">Real-Time Push</span>
+                    </div>
+
+                    <form method="POST" action="{{ url_for('admin') }}">
+                        <input type="hidden" name="device_name" value="{{ config.device_name }}">
+                        {% if config.ipv4_enabled %}<input type="hidden" name="ipv4" value="1">{% endif %}
+                        {% if config.tcp_enabled %}<input type="hidden" name="tcp" value="1">{% endif %}
+                        {% if config.syn_flood_rule %}<input type="hidden" name="syn_flood" value="1">{% endif %}
+                        {% if config.ips_auto_block %}<input type="hidden" name="ips_auto_block" value="1">{% endif %}
+                        <input type="hidden" name="ips_block_threshold" value="{{ config.ips_block_threshold or 0.90 }}">
+                        <input type="hidden" name="ips_block_duration" value="{{ config.ips_block_duration or 15 }}">
+                        {% if config.status == 'ON' %}<input type="hidden" name="device_status" value="1">{% endif %}
+
+                        <div class="row g-3">
+                            <div class="col-lg-8">
+                                <label class="form-label text-muted" style="font-size: 11px; text-transform: uppercase;">Incoming Webhook URL</label>
+                                <input type="url" name="webhook_url" id="admin_webhook_url" class="settings-input" 
+                                       placeholder="https://discord.com/api/webhooks/... or https://hooks.slack.com/services/..."
+                                       value="{{ config.webhook_url or '' }}">
+                                <small class="text-muted" style="font-size: 11px;">
+                                    Supports Discord Webhook URLs or Slack Incoming Webhook URLs.
+                                </small>
+                            </div>
+
+                            <div class="col-lg-4 d-flex flex-column justify-content-end">
+                                <div class="p-2 mb-2 rounded" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);">
+                                    <div class="form-check form-switch m-0 d-flex justify-content-between align-items-center">
+                                        <label class="form-check-label text-white fw-bold" for="webhookToggle" style="font-size: 12px;">Enable Webhook Push</label>
+                                        <input class="form-check-input" type="checkbox" name="webhook_enabled" id="webhookToggle" style="cursor: pointer;"
+                                               {% if config.webhook_enabled %}checked{% endif %}>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="d-flex gap-2 mt-3 flex-wrap">
+                            <button type="submit" class="btn btn-cyan px-4">
+                                <i class="bi bi-save me-1"></i> Save Webhook Settings
+                            </button>
+                            <button type="button" class="btn btn-outline-soc" onclick="testWebhookDelivery()">
+                                <i class="bi bi-send-fill text-warning me-1"></i> Send Test Incident Card
+                            </button>
+                        </div>
+                        <div id="webhookTestMsg" class="mt-2" style="font-size: 12px;"></div>
+                    </form>
+                </div>
+
+                <!-- AbuseIPDB Threat Intelligence Engine Card -->
+                <div class="soc-card mt-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                        <div>
+                            <h5 class="fw-bold m-0 text-white"><i class="bi bi-globe-americas text-warning me-2"></i> External Threat Intelligence (AbuseIPDB Integration)</h5>
+                            <small class="text-muted">Query global crowdsourced IP abuse databases with 24-hour local SQLite zero-quota caching</small>
+                        </div>
+                        <span class="badge bg-dark border border-warning text-warning px-3 py-1">Zero-Cost Tier (1,000 checks/day)</span>
+                    </div>
+
+                    <form method="POST" action="{{ url_for('admin') }}">
+                        <input type="hidden" name="device_name" value="{{ config.device_name }}">
+                        {% if config.ipv4_enabled %}<input type="hidden" name="ipv4" value="1">{% endif %}
+                        {% if config.tcp_enabled %}<input type="hidden" name="tcp" value="1">{% endif %}
+                        {% if config.syn_flood_rule %}<input type="hidden" name="syn_flood" value="1">{% endif %}
+                        {% if config.ips_auto_block %}<input type="hidden" name="ips_auto_block" value="1">{% endif %}
+                        <input type="hidden" name="ips_block_threshold" value="{{ config.ips_block_threshold or 0.90 }}">
+                        <input type="hidden" name="ips_block_duration" value="{{ config.ips_block_duration or 15 }}">
+                        {% if config.webhook_enabled %}<input type="hidden" name="webhook_enabled" value="1">{% endif %}
+                        <input type="hidden" name="webhook_url" value="{{ config.webhook_url or '' }}">
+                        {% if config.status == 'ON' %}<input type="hidden" name="device_status" value="1">{% endif %}
+
+                        <div class="row g-3">
+                            <div class="col-lg-8">
+                                <label class="form-label text-muted" style="font-size: 11px; text-transform: uppercase;">AbuseIPDB API Key (Free Community Key)</label>
+                                <input type="password" name="abuseipdb_api_key" id="admin_abuse_key" class="settings-input" 
+                                       placeholder="Paste your free AbuseIPDB key here..."
+                                       value="{{ config.abuseipdb_api_key or '' }}">
+                                <small class="text-muted" style="font-size: 11px;">
+                                    Get your free key at <a href="https://www.abuseipdb.com/api" target="_blank" class="text-cyan">abuseipdb.com/api</a> (1,000 queries/day). If empty, heuristic reputation is used.
+                                </small>
+                            </div>
+
+                            <div class="col-lg-4 d-flex flex-column justify-content-end">
+                                <div class="p-2 mb-2 rounded" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);">
+                                    <div class="form-check form-switch m-0 d-flex justify-content-between align-items-center">
+                                        <label class="form-check-label text-white fw-bold" for="abuseToggle" style="font-size: 12px;">Enable Live Lookups</label>
+                                        <input class="form-check-input" type="checkbox" name="abuseipdb_enabled" id="abuseToggle" style="cursor: pointer;"
+                                               {% if config.abuseipdb_enabled %}checked{% endif %}>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-cyan px-4 mt-3">
+                            <i class="bi bi-save me-1"></i> Save Threat Intel Settings
+                        </button>
+                    </form>
+
+                    <!-- Interactive Live IP Threat Lookup Bar -->
+                    <div class="p-3 mt-4 rounded" style="background: rgba(0, 229, 255, 0.03); border: 1px dashed rgba(0, 229, 255, 0.2);">
+                        <h6 class="fw-bold text-cyan mb-2"><i class="bi bi-search me-1"></i> Instant IP Reputation Lookup</h6>
+                        <div class="row g-2">
+                            <div class="col-md-9">
+                                <input type="text" id="lookup_ip_input" class="settings-input" placeholder="e.g. 118.25.6.39 or 185.220.101.5">
+                            </div>
+                            <div class="col-md-3">
+                                <button type="button" class="btn btn-outline-cyan w-100" onclick="lookupIpThreat()">
+                                    <i class="bi bi-search me-1"></i> Check Reputation
+                                </button>
+                            </div>
+                        </div>
+                        <div id="threatLookupResult" class="mt-3" style="display: none;"></div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </main>
+</div>
+
+<!-- Scripts -->
+<script src="{{ url_for('static', filename='js/jquery.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+
+<script>
+    // ===============================================================
+    // COLLAPSIBLE SIDEBAR & RESPONSIVE DRAWER LOGIC
+    // ===============================================================
+    function initSidebarState() {
+        const isCollapsed = localStorage.getItem('ai_nids_sidebar_collapsed') === 'true';
+        if (isCollapsed && window.innerWidth >= 992) {
+            document.body.classList.add('sidebar-collapsed');
+        }
+    }
+    initSidebarState();
+
+    function toggleSidebar() {
+        if (window.innerWidth < 992) {
+            const sidebar = document.getElementById('socSidebar');
+            const backdrop = document.getElementById('socBackdrop');
+            const isOpen = sidebar.classList.contains('mobile-open');
+            if (isOpen) {
+                sidebar.classList.remove('mobile-open');
+                backdrop.classList.remove('show');
+            } else {
+                sidebar.classList.add('mobile-open');
+                backdrop.classList.add('show');
+            }
+        } else {
+            document.body.classList.toggle('sidebar-collapsed');
+            const collapsed = document.body.classList.contains('sidebar-collapsed');
+            localStorage.setItem('ai_nids_sidebar_collapsed', collapsed ? 'true' : 'false');
+            
+            // Trigger Chart.js resize smoothly after CSS transition completes
+            setTimeout(() => {
+                window.dispatchEvent(new Event('resize'));
+                resizeAllCharts();
+            }, 270);
+        }
+    }
+
+    function closeMobileSidebar() {
+        document.getElementById('socSidebar')?.classList.remove('mobile-open');
+        document.getElementById('socBackdrop')?.classList.remove('show');
+    }
+
+    // Tab Switching Logic
+    function switchTab(tabId) {
+        document.querySelectorAll('.soc-tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.soc-nav-item').forEach(el => el.classList.remove('active'));
+
+        const targetContent = document.getElementById('tab-' + tabId);
+        const targetNav = document.getElementById('nav-' + tabId);
+        if (targetContent) targetContent.classList.add('active');
+        if (targetNav) targetNav.classList.add('active');
+
+        // Close mobile drawer after navigating
+        if (window.innerWidth < 992) {
+            closeMobileSidebar();
+        }
+
+        if (tabId === 'overview') {
+            setTimeout(resizeAllCharts, 100);
+        } else if (tabId === 'explorer') {
+            loadHistoricalFlows(currentExplorerPage);
+        } else if (tabId === 'subscribers') {
+            loadSubscribers();
+        } else if (tabId === 'policies') {
+            loadBlockedIps();
+        }
+    }
+
+    // ===============================================================
+    // CHART.JS SETUP & INSTANCES
+    // ===============================================================
+    let chartTraffic = null;
+    let chartTimeline = null;
+    let chartCls = null;
+    let chartPorts = null;
+
+    let overviewData = {{ overview | tojson }};
+
+    function initCharts(data) {
+        // Destroy existing if re-initializing
+        if (chartTraffic) chartTraffic.destroy();
+        if (chartTimeline) chartTimeline.destroy();
+        if (chartCls) chartCls.destroy();
+        if (chartPorts) chartPorts.destroy();
+
+        // 1. Traffic Composition Donut Chart
+        const ctxTraffic = document.getElementById('trafficCompositionChart');
+        if (ctxTraffic) {
+            chartTraffic = new Chart(ctxTraffic.getContext('2d'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Benign Baseline', 'Malicious Intrusion'],
+                    datasets: [{
+                        data: [data.summary.benign_flows, data.summary.malicious_flows],
+                        backgroundColor: ['#00e676', '#ff3366'],
+                        borderColor: '#0d1326',
+                        borderWidth: 3,
+                        hoverOffset: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '74%',
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#9aa7c7',
+                                font: { size: 11.5, family: 'Inter' },
+                                padding: 14,
+                                boxWidth: 12
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: '#0a0f1d',
+                            titleColor: '#fff',
+                            bodyColor: '#f0f4fc',
+                            borderColor: '#19233c',
+                            borderWidth: 1
+                        }
+                    }
+                }
+            });
+        }
+
+        // 2. Attack Timeline Area/Bar Chart
+        const ctxTimeline = document.getElementById('attackTimelineChart');
+        if (ctxTimeline) {
+            const hasTimelineData = data.attack_timeline && data.attack_timeline.labels && data.attack_timeline.labels.length > 0;
+            const labels = hasTimelineData ? data.attack_timeline.labels : ['No Data'];
+            const counts = hasTimelineData ? data.attack_timeline.counts : [0];
+
+            chartTimeline = new Chart(ctxTimeline.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Malicious Flow Count',
+                        data: counts,
+                        backgroundColor: 'rgba(0, 210, 255, 0.45)',
+                        borderColor: '#00d2ff',
+                        borderWidth: 1.5,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.04)' },
+                            ticks: { color: '#8a99b5', font: { size: 10 } }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.04)' },
+                            ticks: { color: '#8a99b5', font: { size: 10 } }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#0a0f1d',
+                            borderColor: '#00d2ff',
+                            borderWidth: 1
+                        }
+                    }
+                }
+            });
+        }
+
+        // 3. Threat Classification Horizontal Bar Chart
+        const ctxCls = document.getElementById('classificationChart');
+        if (ctxCls) {
+            const hasClsData = data.classification_dist && data.classification_dist.labels && data.classification_dist.labels.length > 0;
+            const labels = hasClsData ? data.classification_dist.labels : ['No Attacks'];
+            const counts = hasClsData ? data.classification_dist.counts : [0];
+
+            chartCls = new Chart(ctxCls.getContext('2d'), {
+                type: 'bar',
+                indexAxis: 'y',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: counts,
+                        backgroundColor: ['#ff3366', '#ff8400', '#00d2ff', '#9d4edd', '#ffcc00'],
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.04)' },
+                            ticks: { color: '#8a99b5', font: { size: 9.5 } }
+                        },
+                        y: {
+                            grid: { display: false },
+                            ticks: { color: '#f0f4fc', font: { size: 10 } }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#0a0f1d',
+                            borderColor: '#ff3366',
+                            borderWidth: 1
+                        }
+                    }
+                }
+            });
+        }
+
+        // 4. Target Destination Port Distribution Chart
+        const ctxPorts = document.getElementById('portDistributionChart');
+        if (ctxPorts) {
+            const hasPortData = data.port_distribution && data.port_distribution.length > 0;
+            const portLabels = hasPortData ? data.port_distribution.map(p => p.label) : ['No Port Data'];
+            const portCounts = hasPortData ? data.port_distribution.map(p => p.count) : [0];
+
+            chartPorts = new Chart(ctxPorts.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: portLabels,
+                    datasets: [{
+                        label: 'Attack Hits',
+                        data: portCounts,
+                        backgroundColor: 'rgba(157, 78, 221, 0.55)',
+                        borderColor: '#9d4edd',
+                        borderWidth: 1.5,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(255, 255, 255, 0.04)' },
+                            ticks: { color: '#8a99b5', font: { size: 9.5 } }
+                        },
+                        y: {
+                            grid: { color: 'rgba(255, 255, 255, 0.04)' },
+                            ticks: { color: '#8a99b5', font: { size: 10 } }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#0a0f1d',
+                            borderColor: '#9d4edd',
+                            borderWidth: 1
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    function resizeAllCharts() {
+        if (chartTraffic) chartTraffic.resize();
+        if (chartTimeline) chartTimeline.resize();
+        if (chartCls) chartCls.resize();
+        if (chartPorts) chartPorts.resize();
+    }
+
+    // Initialize charts on DOM ready
+    initCharts(overviewData);
+
+    // ===============================================================
+    // ASYNCHRONOUS OVERVIEW TELEMETRY REFRESH
+    // ===============================================================
+    function refreshOverviewTelemetry() {
+        const refreshIcon = document.getElementById('refreshIcon');
+        const btn = document.getElementById('btnRefreshOverview');
+        if (refreshIcon) refreshIcon.classList.add('spin');
+        if (btn) btn.disabled = true;
+
+        fetch('/api/admin/overview')
+            .then(res => res.json())
+            .then(data => {
+                if (data.status !== 'ok') {
+                    console.error('Refresh API returned error:', data);
+                    return;
+                }
+
+                overviewData = data;
+
+                // Update summary KPI counters
+                document.getElementById('kpi-total-flows').innerText = Number(data.summary.total_flows).toLocaleString();
+                document.getElementById('kpi-malicious-flows').innerText = Number(data.summary.malicious_flows).toLocaleString();
+                document.getElementById('kpi-benign-flows').innerText = Number(data.summary.benign_flows).toLocaleString();
+                document.getElementById('kpi-critical-detections').innerText = Number(data.summary.critical_detections).toLocaleString();
+                document.getElementById('kpi-open-alerts').innerText = data.summary.open_alerts;
+                document.getElementById('kpi-malicious-pct').innerText = data.summary.malicious_pct;
+                document.getElementById('kpi-benign-pct').innerText = data.summary.benign_pct;
+                document.getElementById('label-benign-pct').innerText = data.summary.benign_pct + '%';
+                document.getElementById('label-malicious-pct').innerText = data.summary.malicious_pct + '%';
+
+                // Update topbar telemetry pills
+                const topbarTotal = document.getElementById('topbar-total-flows');
+                if (topbarTotal) topbarTotal.innerText = Number(data.summary.total_flows).toLocaleString() + ' Flows';
+                const topbarCrit = document.getElementById('topbar-critical-threats');
+                if (topbarCrit) topbarCrit.innerText = Number(data.summary.critical_detections).toLocaleString();
+
+                // Re-render charts with fresh data
+                initCharts(data);
+
+                // Update Top Attacking Sources
+                const srcTbody = document.getElementById('top-sources-tbody');
+                if (srcTbody && data.top_sources) {
+                    if (data.top_sources.length === 0) {
+                        srcTbody.innerHTML = `<tr><td colspan="2" class="soc-empty-state"><i class="bi bi-shield-check text-success"></i> No attacking sources recorded.</td></tr>`;
+                    } else {
+                        const maxSrc = data.top_sources[0].count || 1;
+                        let srcHtml = '';
+                        data.top_sources.forEach(item => {
+                            const pct = Math.round((item.count / maxSrc) * 100);
+                            srcHtml += `
+                                <tr>
+                                    <td>
+                                        <div class="soc-ip-cell">
+                                            <i class="bi bi-shield-x text-danger"></i>
+                                            <span>${escapeHtml(item.ip)}</span>
+                                        </div>
+                                        <div><span class="country-pill"><i class="bi bi-globe"></i> ${escapeHtml(item.country)}</span></div>
+                                        <div class="soc-mini-bar">
+                                            <div class="soc-mini-bar-fill-red" style="width: ${pct}%;"></div>
+                                        </div>
+                                    </td>
+                                    <td class="text-end fw-bold font-monospace" style="color: var(--red-glow); vertical-align: middle;">
+                                        ${Number(item.count).toLocaleString()}
+                                    </td>
+                                </tr>
+                            `;
+                        });
+                        srcTbody.innerHTML = srcHtml;
+                    }
+                }
+
+                // Update Top Targeted Nodes
+                const tgtTbody = document.getElementById('top-targets-tbody');
+                if (tgtTbody && data.top_targets) {
+                    if (data.top_targets.length === 0) {
+                        tgtTbody.innerHTML = `<tr><td colspan="2" class="soc-empty-state"><i class="bi bi-check2-circle text-success"></i> No targeted destination hosts detected.</td></tr>`;
+                    } else {
+                        const maxTgt = data.top_targets[0].count || 1;
+                        let tgtHtml = '';
+                        data.top_targets.forEach(item => {
+                            const pct = Math.round((item.count / maxTgt) * 100);
+                            tgtHtml += `
+                                <tr>
+                                    <td>
+                                        <div class="soc-ip-cell">
+                                            <i class="bi bi-hdd-network text-info"></i>
+                                            <span>${escapeHtml(item.ip)}</span>
+                                        </div>
+                                        <div class="text-muted" style="font-size: 10px;">Primary Target Host</div>
+                                        <div class="soc-mini-bar">
+                                            <div class="soc-mini-bar-fill-amber" style="width: ${pct}%;"></div>
+                                        </div>
+                                    </td>
+                                    <td class="text-end fw-bold font-monospace" style="color: var(--amber-glow); vertical-align: middle;">
+                                        ${Number(item.count).toLocaleString()}
+                                    </td>
+                                </tr>
+                            `;
+                        });
+                        tgtTbody.innerHTML = tgtHtml;
+                    }
+                }
+
+                // Update Recent Security Incidents
+                const alertsTbody = document.getElementById('recent-alerts-tbody');
+                if (alertsTbody && data.recent_alerts) {
+                    if (data.recent_alerts.length === 0) {
+                        alertsTbody.innerHTML = `<tr><td colspan="9" class="soc-empty-state"><i class="bi bi-shield-check text-success"></i> No active security incidents detected. Monitored traffic is normal.</td></tr>`;
+                    } else {
+                        let alertHtml = '';
+                        data.recent_alerts.forEach(alert => {
+                            alertHtml += `
+                                <tr>
+                                    <td class="font-monospace" style="font-size: 11.5px; color: var(--text-secondary);">${escapeHtml(alert.timestamp_formatted)}</td>
+                                    <td>
+                                        <div class="soc-ip-cell">
+                                            <i class="bi bi-shield-x text-danger"></i>
+                                            <span>${escapeHtml(alert.src_ip)}</span>
+                                        </div>
+                                        <div><span class="country-pill"><i class="bi bi-globe"></i> ${escapeHtml(alert.country)}</span></div>
+                                    </td>
+                                    <td class="font-monospace" style="font-size: 12px;">${escapeHtml(alert.dst_ip)}</td>
+                                    <td>
+                                        <span class="badge bg-secondary" style="font-size: 9.5px;">${escapeHtml(alert.protocol)}</span>
+                                        <span class="font-monospace ms-1" style="font-size: 11px;">:${escapeHtml(alert.dst_port)}</span>
+                                    </td>
+                                    <td><span class="text-danger fw-semibold" style="font-size: 12px;">${escapeHtml(alert.reason)}</span></td>
+                                    <td class="font-monospace fw-bold" style="font-size: 12.5px;">${escapeHtml(alert.score)}</td>
+                                    <td><span class="${escapeHtml(alert.severity_class)}">${escapeHtml(alert.severity)}</span></td>
+                                    <td class="font-monospace text-muted" style="font-size: 11px;">${escapeHtml(alert.latency_ms)} ms</td>
+                                    <td>
+                                        <span class="badge bg-danger bg-opacity-25 text-danger border border-danger border-opacity-25" style="font-size: 9.5px;">
+                                            <i class="bi bi-radioactive"></i> Active Incident
+                                        </span>
+                                    </td>
+                                </tr>
+                            `;
+                        });
+                        alertsTbody.innerHTML = alertHtml;
+                    }
+                }
+            })
+            .catch(err => {
+                console.error('Failed refreshing overview telemetry:', err);
+            })
+            .finally(() => {
+                if (refreshIcon) refreshIcon.classList.remove('spin');
+                if (btn) btn.disabled = false;
+            });
+    }
+
+    // ===============================================================
+    // HISTORICAL FLOW EXPLORER (Server-Side Pagination & Filtering)
+    // ===============================================================
+    let currentExplorerPage = 1;
+    let totalExplorerPages = 1;
+
+    function loadHistoricalFlows(page = 1) {
+        currentExplorerPage = page;
+        const tbody = document.getElementById('explorer-tbody');
+        tbody.innerHTML = `<tr><td colspan="10" class="text-center py-4 text-muted"><i class="bi bi-hourglass-split fa-spin me-2"></i> Querying indexed database records...</td></tr>`;
+
+        const srcIp = document.getElementById('filter-src-ip').value.trim();
+        const dstIp = document.getElementById('filter-dst-ip').value.trim();
+        const label = document.getElementById('filter-label').value;
+        const severity = document.getElementById('filter-severity').value;
+        const sortVal = document.getElementById('filter-sort').value.split('-');
+        const perPage = document.getElementById('explorer-per-page').value;
+
+        const params = new URLSearchParams({
+            page: page,
+            per_page: perPage,
+            sort_by: sortVal[0],
+            sort_dir: sortVal[1],
+            src_ip: srcIp,
+            dst_ip: dstIp,
+            label: label,
+            severity: severity
+        });
+
+        fetch(`/api/flows/history?${params.toString()}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status !== 'ok') {
+                    tbody.innerHTML = `<tr><td colspan="10" class="text-center py-4 text-danger"><i class="bi bi-exclamation-triangle me-2"></i> Query error: ${escapeHtml(data.message)}</td></tr>`;
+                    return;
+                }
+
+                totalExplorerPages = data.total_pages;
+                document.getElementById('explorer-counts').innerText = `Displaying ${data.rows.length} of ${data.total.toLocaleString()} matching records (Page ${data.page} of ${data.total_pages.toLocaleString()})`;
+                document.getElementById('pagination-info').innerText = `Page ${data.page} of ${data.total_pages.toLocaleString()} (${data.total.toLocaleString()} total flows)`;
+
+                document.getElementById('btn-prev-page').disabled = (data.page <= 1);
+                document.getElementById('btn-next-page').disabled = (data.page >= data.total_pages);
+
+                if (data.rows.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="10" class="soc-empty-state"><i class="bi bi-search"></i> No flows match the active filter criteria. Try broadening your search.</td></tr>`;
+                    return;
+                }
+
+                let html = '';
+                data.rows.forEach(r => {
+                    const labelBadge = (r.label === 1)
+                        ? `<span class="badge bg-danger bg-opacity-25 text-danger border border-danger border-opacity-25">ATTACK</span>`
+                        : `<span class="badge bg-success bg-opacity-25 text-success border border-success border-opacity-25">BENIGN</span>`;
+
+                    html += `
+                        <tr>
+                            <td class="font-monospace text-muted" style="font-size: 11px;">#${r.id}</td>
+                            <td class="font-monospace text-secondary" style="font-size: 11px;">${escapeHtml(r.timestamp_formatted)}</td>
+                            <td>
+                                <div class="soc-ip-cell">
+                                    <span class="${r.label === 1 ? 'text-danger' : 'text-info'}">${escapeHtml(r.src_ip)}</span>
+                                </div>
+                                <div><span class="country-pill"><i class="bi bi-globe"></i> ${escapeHtml(r.country)}</span></div>
+                            </td>
+                            <td class="font-monospace" style="font-size: 12px;">${escapeHtml(r.dst_ip)}</td>
+                            <td>
+                                <span class="badge bg-secondary" style="font-size: 9.5px;">${escapeHtml(r.protocol)}</span>
+                                <span class="font-monospace ms-1" style="font-size: 11px;">:${escapeHtml(r.dst_port)}</span>
+                            </td>
+                            <td>${labelBadge}</td>
+                            <td style="font-size: 12px; color: ${r.label === 1 ? 'var(--red-glow)' : 'var(--text-secondary)'}; font-weight: 500;">
+                                ${escapeHtml(r.reason)}
+                            </td>
+                            <td class="font-monospace fw-bold" style="font-size: 12px;">${escapeHtml(r.score)}</td>
+                            <td><span class="${escapeHtml(r.severity_class)}">${escapeHtml(r.severity)}</span></td>
+                            <td class="font-monospace text-muted" style="font-size: 11px;">${escapeHtml(r.latency_ms)} ms</td>
+                            <td class="text-end">
+                                ${r.label === 1 ? `
+                                    <button type="button" class="btn btn-outline-success btn-sm py-0 px-1" style="font-size: 10px;" onclick="auditAdminFlow(${r.id}, '${escapeHtml(r.src_ip)}', 1, ${r.score})" title="Confirm True Intrusion"><i class="bi bi-check-lg"></i></button>
+                                    <button type="button" class="btn btn-outline-warning btn-sm py-0 px-1 ms-1" style="font-size: 10px;" onclick="auditAdminFlow(${r.id}, '${escapeHtml(r.src_ip)}', 0, ${r.score})" title="Mark False Positive (Whitelist)"><i class="bi bi-x-lg"></i> FP</button>
+                                ` : ''}
+                                <button type="button" class="btn btn-outline-info btn-sm py-0 px-1 ms-1" style="font-size: 10px;" onclick="openAdminExplainModal(${r.id})" title="Explain AI Decision with SHAP"><i class="bi bi-cpu"></i> Explain</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                tbody.innerHTML = html;
+            })
+            .catch(err => {
+                tbody.innerHTML = `<tr><td colspan="11" class="text-center py-4 text-danger"><i class="bi bi-wifi-off me-2"></i> Network Error: ${escapeHtml(err.message)}</td></tr>`;
+            });
+    }
+
+    function prevPage() {
+        if (currentExplorerPage > 1) {
+            loadHistoricalFlows(currentExplorerPage - 1);
+        }
+    }
+
+    function nextPage() {
+        if (currentExplorerPage < totalExplorerPages) {
+            loadHistoricalFlows(currentExplorerPage + 1);
+        }
+    }
+
+    function resetExplorerFilters() {
+        document.getElementById('filter-src-ip').value = '';
+        document.getElementById('filter-dst-ip').value = '';
+        document.getElementById('filter-label').value = '';
+        document.getElementById('filter-severity').value = '';
+        document.getElementById('filter-sort').value = 'ts-DESC';
+        loadHistoricalFlows(1);
+    }
+
+    function exportFilteredCsv() {
+        window.location.href = '/download_logs';
+    }
+
+    // ===============================================================
+    // TEST EMAIL LOGIC (Preserving exact validated fix)
+    // ===============================================================
+    document.getElementById('btnTestEmail')?.addEventListener('click', function() {
+        const btn = this;
+        const origText = btn.innerHTML;
+        const statusMsg = document.getElementById('emailStatusMsg');
+        const emailInput = document.getElementById('admin_email_input');
+        const email = emailInput ? emailInput.value.trim() : '';
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!email || !emailRegex.test(email)) {
+            statusMsg.innerHTML = '<span class="text-danger fw-semibold"><i class="bi bi-exclamation-circle-fill"></i> Please enter a valid email address before testing.</span>';
+            if (emailInput) emailInput.focus();
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Sending...';
+        statusMsg.innerHTML = '<span class="text-info fw-semibold"><i class="fa fa-spinner fa-spin"></i> Contacting SMTP gateway and sending test alert to ' + escapeHtml(email) + '...</span>';
+
+        fetch('/api/test_email', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ email: email })
+        })
+            .then(res => res.json().then(data => ({ ok: res.ok, data: data })))
+            .then(({ ok, data }) => {
+                btn.disabled = false;
+                btn.innerHTML = origText;
+                if (ok && (data.status === 'success' || data.status === 'ok')) {
+                    statusMsg.innerHTML = '<span class="text-success fw-semibold"><i class="bi bi-check-circle-fill"></i> ' + escapeHtml(data.message) + '</span>';
+                } else {
+                    statusMsg.innerHTML = '<span class="text-danger fw-semibold"><i class="bi bi-x-circle-fill"></i> ' + escapeHtml(data.message || 'Delivery failed.') + '</span>';
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.innerHTML = origText;
+                statusMsg.innerHTML = '<span class="text-danger fw-semibold"><i class="bi bi-x-circle-fill"></i> Network error: ' + escapeHtml(err.message) + '</span>';
+            });
+    });
+
+    // ===============================================================
+    // SUBSCRIBERS LOGIC
+    // ===============================================================
+    function loadSubscribers() {
+        const tbody = document.getElementById('subscribers-tbody');
+        tbody.innerHTML = `<tr><td colspan="3" class="text-center py-3 text-muted"><i class="fa fa-spinner fa-spin"></i> Loading...</td></tr>`;
+
+        fetch('/api/subscribers')
+            .then(r => r.json())
+            .then(data => {
+                if (data.status !== 'ok') {
+                    tbody.innerHTML = `<tr><td colspan="3" class="text-center py-3 text-danger"><i class="bi bi-exclamation-triangle me-1"></i> Error: ${escapeHtml(data.message)}</td></tr>`;
+                    return;
+                }
+
+                let html = '';
+                if (data.admin_email) {
+                    html += `
+                        <tr>
+                            <td>
+                                <strong>${escapeHtml(data.admin_email)}</strong>
+                            </td>
+                            <td><span class="badge bg-info text-dark">Primary Admin</span></td>
+                            <td class="text-end text-muted"><small>Configured in Node</small></td>
+                        </tr>
+                    `;
+                }
+
+                (data.subscribers || []).forEach(sub => {
+                    html += `
+                        <tr>
+                            <td>${escapeHtml(sub)}</td>
+                            <td><span class="badge bg-secondary">Subscriber</span></td>
+                            <td class="text-end">
+                                <button class="btn btn-outline-danger btn-sm py-0 px-2" onclick="removeSubscriber('${escapeHtml(sub)}')">
+                                    <i class="bi bi-trash"></i> Unsubscribe
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                tbody.innerHTML = html || `<tr><td colspan="3" class="soc-empty-state"><i class="bi bi-envelope-open"></i> No external subscribers registered yet.</td></tr>`;
+            })
+            .catch(err => {
+                tbody.innerHTML = `<tr><td colspan="3" class="text-center py-3 text-danger"><i class="bi bi-wifi-off me-1"></i> Network Error: ${escapeHtml(err.message)}</td></tr>`;
+            });
+    }
+
+    function addNewSubscriber() {
+        const emailInput = document.getElementById('new_sub_email');
+        const email = emailInput ? emailInput.value.trim() : '';
+        const msgDiv = document.getElementById('subStatusMsg');
+
+        if (!email || !email.includes('@')) {
+            msgDiv.innerHTML = '<span class="text-danger"><i class="bi bi-exclamation-circle me-1"></i> Enter a valid email address.</span>';
+            return;
+        }
+
+        msgDiv.innerHTML = '<span class="text-info"><i class="fa fa-spinner fa-spin"></i> Subscribing...</span>';
+        fetch('/api/subscribers', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email })
+        })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    msgDiv.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i> ' + escapeHtml(data.message) + '</span>';
+                    if (emailInput) emailInput.value = '';
+                    loadSubscribers();
+                } else {
+                    msgDiv.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1"></i> ' + escapeHtml(data.message) + '</span>';
+                }
+            })
+            .catch(err => {
+                msgDiv.innerHTML = '<span class="text-danger">' + escapeHtml(err.message) + '</span>';
+            });
+    }
+
+    function removeSubscriber(email) {
+        if (!confirm(`Are you sure you want to unsubscribe ${email}?`)) return;
+
+        fetch('/api/subscribers/delete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email })
+        })
+            .then(r => r.json())
+            .then(data => {
+                loadSubscribers();
+            });
+    }
+
+    // ===============================================================
+    // WEBHOOK INCIDENT DISPATCH TEST
+    // ===============================================================
+    function testWebhookDelivery() {
+        const urlInput = document.getElementById('admin_webhook_url');
+        const msgDiv = document.getElementById('webhookTestMsg');
+        const url = (urlInput?.value || '').trim();
+        if (!url) {
+            msgDiv.innerHTML = '<span class="text-warning"><i class="bi bi-exclamation-circle me-1"></i> Please paste a valid Webhook URL first.</span>';
+            return;
+        }
+
+        msgDiv.innerHTML = '<span class="text-info"><i class="fa fa-spinner fa-spin me-1"></i> Dispatching test incident embed...</span>';
+        fetch('/api/test_webhook', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ webhook_url: url })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                msgDiv.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i> ' + escapeHtml(data.message) + '</span>';
+            } else {
+                msgDiv.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1"></i> ' + escapeHtml(data.message) + '</span>';
+            }
+        })
+        .catch(err => {
+            msgDiv.innerHTML = '<span class="text-danger">Delivery error: ' + escapeHtml(err.message) + '</span>';
+        });
+    }
+
+    // ===============================================================
+    // THREAT INTELLIGENCE REPUTATION LOOKUP
+    // ===============================================================
+    function lookupIpThreat() {
+        const input = document.getElementById('lookup_ip_input');
+        const resDiv = document.getElementById('threatLookupResult');
+        const ip = (input?.value || '').trim();
+        if (!ip) {
+            alert("Please enter a valid IP address to look up.");
+            return;
+        }
+
+        resDiv.style.display = 'block';
+        resDiv.innerHTML = '<span class="text-info"><i class="fa fa-spinner fa-spin me-1"></i> Querying threat intelligence database...</span>';
+
+        fetch('/api/threat_intel/check?ip=' + encodeURIComponent(ip))
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    const info = data.threat_intel;
+                    const score = info.abuse_score || 0;
+                    const badgeClass = score >= 80 ? 'bg-danger' : (score >= 40 ? 'bg-warning text-dark' : 'bg-success');
+                    resDiv.innerHTML = `
+                        <div class="p-3 rounded" style="background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1);">
+                            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-2">
+                                <h6 class="fw-bold font-monospace text-warning m-0">${escapeHtml(info.ip)}</h6>
+                                <span class="badge ${badgeClass} fs-6 px-3 py-1">Abuse Confidence: ${score}%</span>
+                            </div>
+                            <div class="row g-2 text-muted small">
+                                <div class="col-sm-4"><strong class="text-white">Total Reports:</strong> ${info.reports}</div>
+                                <div class="col-sm-4"><strong class="text-white">ISP:</strong> ${escapeHtml(info.isp || 'N/A')}</div>
+                                <div class="col-sm-4"><strong class="text-white">Country:</strong> ${escapeHtml(info.country || 'N/A')}</div>
+                                <div class="col-sm-6"><strong class="text-white">Data Source:</strong> ${escapeHtml(info.status)}</div>
+                                <div class="col-sm-6"><strong class="text-white">Cache Status:</strong> ${info.cached ? '⚡ 24h Local Cache Hit' : '🌐 Fresh Query'}</div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    resDiv.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1"></i> ' + escapeHtml(data.message) + '</span>';
+                }
+            })
+            .catch(err => {
+                resDiv.innerHTML = '<span class="text-danger">Lookup error: ' + escapeHtml(err.message) + '</span>';
+            });
+    }
+
+    // ===============================================================
+    // ACTIVE IPS FIREWALL BLOCKS
+    // ===============================================================
+    function loadBlockedIps() {
+        const tbody = document.getElementById('blockedIpsBody');
+        if (!tbody) return;
+        fetch('/api/ips/blocked?active_only=false&limit=30')
+            .then(r => r.json())
+            .then(data => {
+                const list = data.records || [];
+                if (list.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted py-3"><i class="bi bi-shield-check text-success me-1"></i> No active firewall blocks. Network perimeter clean.</td></tr>';
+                    return;
+                }
+                const now = Date.now() / 1000;
+                tbody.innerHTML = list.map(item => {
+                    const timeLeft = Math.max(0, Math.round(item.expires_at - now));
+                    const minsLeft = Math.ceil(timeLeft / 60);
+                    const isExp = (item.status === 'UNBLOCKED' || timeLeft <= 0);
+                    const statusBadge = (item.status === 'ACTIVE' && timeLeft > 0)
+                        ? '<span class="badge bg-danger"><i class="bi bi-lock-fill me-1"></i> ACTIVE DROP</span>'
+                        : '<span class="badge bg-secondary">RELEASED</span>';
+                    const blockedDate = new Date(item.blocked_at * 1000).toLocaleTimeString();
+                    
+                    return `
+                        <tr>
+                            <td class="fw-bold font-monospace text-warning">${escapeHtml(item.ip)}</td>
+                            <td>${escapeHtml(item.reason || 'Critical Threat')}</td>
+                            <td><span class="badge bg-dark border border-danger text-danger">${parseFloat(item.attack_score || 0).toFixed(2)}</span></td>
+                            <td class="text-muted">${blockedDate}</td>
+                            <td>${isExp ? '<span class="text-muted">Expired</span>' : `<span class="text-cyan fw-bold">${minsLeft} min left</span>`}</td>
+                            <td>${statusBadge}</td>
+                            <td class="text-end">
+                                ${item.status === 'ACTIVE' && timeLeft > 0 ? `
+                                    <button type="button" class="btn btn-outline-success btn-sm py-0 px-2" onclick="unblockIp('${escapeHtml(item.ip)}')">
+                                        <i class="bi bi-unlock-fill"></i> Unblock
+                                    </button>
+                                ` : '<span class="text-muted small">-</span>'}
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            })
+            .catch(err => {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-3">Error loading blocked IPs: ${escapeHtml(err.message)}</td></tr>`;
+            });
+    }
+
+    function unblockIp(ip) {
+        if (!confirm(`Are you sure you want to lift the firewall block on ${ip}?`)) return;
+        fetch('/api/ips/unblock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ip: ip })
+        })
+        .then(r => r.json())
+        .then(res => {
+            loadBlockedIps();
+        })
+        .catch(err => alert("Unblock request failed: " + err.message));
+    }
+
+    function manuallyBlockIp() {
+        const ipInput = document.getElementById('manual_block_ip');
+        const reasonInput = document.getElementById('manual_block_reason');
+        const ip = (ipInput?.value || '').trim();
+        const reason = (reasonInput?.value || 'Manual Security Administrator Ban').trim();
+        if (!ip) {
+            alert("Please enter a valid IP address.");
+            return;
+        }
+        fetch('/api/ips/block_manual', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ip: ip, reason: reason, duration: 15 })
+        })
+        .then(r => r.json())
+        .then(res => {
+            if (ipInput) ipInput.value = '';
+            if (reasonInput) reasonInput.value = '';
+            loadBlockedIps();
+        })
+        .catch(err => alert("Block request failed: " + err.message));
+    }
+
+    // ===============================================================
+    // HUMAN-IN-THE-LOOP MLOPS AUDIT ACTIONS
+    // ===============================================================
+    function auditAdminFlow(flowId, ip, label, score) {
+        const isTP = (label === 1);
+        const actionStr = isTP ? 'Confirm Threat' : 'Mark as False Positive (lift firewall block)';
+        if (!confirm(`Are you sure you want to ${actionStr} for flow #${flowId} (${ip})?`)) return;
+
+        fetch('/api/flows/feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                flow_id: flowId,
+                src_ip: ip,
+                verified_label: label,
+                original_score: score,
+                notes: isTP ? 'SOC Administrator confirmed intrusion' : 'SOC Administrator marked false positive'
+            })
+        })
+        .then(r => r.json())
+        .then(res => {
+            alert(res.message || "Feedback recorded.");
+            loadHistoricalFlows(currentExplorerPage);
+            loadBlockedIps();
+        })
+        .catch(err => alert("Feedback failed: " + err.message));
+    }
+
+    // Load blocked IPs on init if on policies tab or ready
+    document.addEventListener('DOMContentLoaded', function() {
+        loadBlockedIps();
+    });
+
+    function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        const d = document.createElement('div');
+        d.textContent = String(str);
+        return d.innerHTML;
+    }
+
+    // VISUAL EXPLAINABLE AI (SHAP) MODAL FOR HISTORICAL FLOWS
+    let adminShapChart = null;
+    function openAdminExplainModal(flowId) {
+        const modalEl = document.getElementById('adminExplainModal');
+        if (!modalEl) return;
+        const bsModal = new bootstrap.Modal(modalEl);
+
+        document.getElementById('admExpFlowId').innerText = flowId;
+        document.getElementById('admExpSrcIp').innerText = 'Loading...';
+        document.getElementById('admExpLabelBadge').innerHTML = '<span class="badge bg-secondary">...</span>';
+        document.getElementById('admExpScore').innerText = '--';
+        document.getElementById('admExpSummaryText').innerText = 'Computing local Shapley values...';
+        document.getElementById('admExpFeaturesTableBody').innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm text-info me-2"></div> Calculating SHAP feature attributions...</td></tr>';
+
+        bsModal.show();
+
+        fetch(`/api/flows/${flowId}/explain`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.status !== 'ok') {
+                    document.getElementById('admExpSummaryText').innerText = data.message || 'Error loading explanation.';
+                    document.getElementById('admExpFeaturesTableBody').innerHTML = `<tr><td colspan="5" class="text-center py-3 text-danger">${escapeHtml(data.message)}</td></tr>`;
+                    return;
+                }
+
+                document.getElementById('admExpSrcIp').innerText = data.src_ip || '0.0.0.0';
+                const isAttack = (data.label === 1);
+                document.getElementById('admExpLabelBadge').innerHTML = isAttack 
+                    ? '<span class="badge bg-danger">ATTACK</span>'
+                    : '<span class="badge bg-success">NORMAL</span>';
+                document.getElementById('admExpScore').innerText = Number(data.attack_score || 0).toFixed(4);
+
+                const exp = data.explanation || {};
+                document.getElementById('admExpMethod').innerText = (exp.method || 'SHAP TreeExplainer').toUpperCase();
+                document.getElementById('admExpSummaryText').innerText = exp.summary || (isAttack ? 'Primary attack drivers detected.' : 'Traffic features align with normal baseline.');
+
+                renderAdminShapUI(exp.top_features || []);
+            })
+            .catch(err => {
+                document.getElementById('admExpSummaryText').innerText = 'Network error: ' + err.message;
+                document.getElementById('admExpFeaturesTableBody').innerHTML = `<tr><td colspan="5" class="text-center py-3 text-danger">${escapeHtml(err.message)}</td></tr>`;
+            });
+    }
+
+    function renderAdminShapUI(topFeatures) {
+        const tbody = document.getElementById('admExpFeaturesTableBody');
+        if (!tbody) return;
+        tbody.innerHTML = '';
+
+        if (!topFeatures || topFeatures.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-3 text-muted">No feature attributions available for this flow.</td></tr>';
+            return;
+        }
+
+        topFeatures.forEach(f => {
+            const isPushAttack = (f.direction === 'attack');
+            const badge = isPushAttack 
+                ? '<span class="badge bg-danger-subtle text-danger border border-danger-subtle" style="font-size:10px;"><i class="bi bi-arrow-up-right me-1"></i>Attack</span>'
+                : '<span class="badge bg-success-subtle text-success border border-success-subtle" style="font-size:10px;"><i class="bi bi-arrow-down-right me-1"></i>Benign</span>';
+            const sign = f.shap_value > 0 ? '+' : '';
+            const rawVal = f.raw_value !== undefined && f.raw_value !== null ? f.raw_value : '-';
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="font-monospace fw-semibold text-light">${escapeHtml(f.feature)}</td>
+                <td class="text-end font-monospace text-muted">${escapeHtml(rawVal)}</td>
+                <td class="text-end font-monospace fw-bold ${isPushAttack ? 'text-danger' : 'text-success'}">${sign}${f.shap_value.toFixed(4)}</td>
+                <td class="text-end font-monospace">${f.percentage}%</td>
+                <td class="text-end">${badge}</td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        // Render Chart.js
+        const canvas = document.getElementById('admShapChart');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (adminShapChart) {
+            adminShapChart.destroy();
+        }
+
+        const rev = [...topFeatures].reverse();
+        const labels = rev.map(f => f.feature);
+        const dataValues = rev.map(f => f.shap_value);
+        const bgColors = rev.map(f => f.direction === 'attack' ? 'rgba(239, 68, 68, 0.85)' : 'rgba(16, 185, 129, 0.85)');
+        const borderColors = rev.map(f => f.direction === 'attack' ? '#ef4444' : '#10b981');
+
+        adminShapChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'SHAP Attribution',
+                    data: dataValues,
+                    backgroundColor: bgColors,
+                    borderColor: borderColors,
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const val = context.raw;
+                                const sign = val > 0 ? '+' : '';
+                                return ` Attribution: ${sign}${val.toFixed(4)}`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(255,255,255,0.08)' },
+                        ticks: { color: '#94a3b8', font: { size: 10 } }
+                    },
+                    y: {
+                        grid: { display: false },
+                        ticks: { color: '#e2e8f0', font: { size: 11 } }
+                    }
+                }
+            }
+        });
+    }
+</script>
+
+<!-- Admin Visual Explainable AI (SHAP XAI) Modal -->
+<div class="modal fade" id="adminExplainModal" tabindex="-1" aria-labelledby="adminExplainModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content" style="background: #111827; color: #e5e7eb; border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,0.6);">
+      <div class="modal-header" style="border-bottom: 1px solid rgba(255,255,255,0.08); padding: 16px 24px;">
+        <div class="d-flex align-items-center gap-2">
+          <div style="width: 36px; height: 36px; border-radius: 8px; background: linear-gradient(135deg, #6366f1, #3b82f6); display: flex; align-items: center; justify-content: center; color: white;">
+            <i class="bi bi-cpu-fill" style="font-size: 18px;"></i>
+          </div>
+          <div>
+            <h5 class="modal-title m-0" id="adminExplainModalLabel" style="font-size: 16px; font-weight: 700; color: #fff;">Flow #<span id="admExpFlowId">--</span> Explainability <span class="badge bg-primary ms-1" style="font-size: 10px; font-weight: 600;">SHAP TreeExplainer</span></h5>
+            <div class="text-muted" style="font-size: 12px;">Local Feature Attribution &amp; Decision Decomposition</div>
+          </div>
+        </div>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body p-4">
+        <!-- Flow Context Pills -->
+        <div class="d-flex flex-wrap gap-2 mb-3 p-3 rounded" style="background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06); font-size: 12px;">
+          <div><span class="text-muted">Source IP:</span> <strong id="admExpSrcIp" class="font-monospace text-info">--</strong></div>
+          <div class="ms-3"><span class="text-muted">Classification:</span> <span id="admExpLabelBadge">--</span></div>
+          <div class="ms-3"><span class="text-muted">Threat Score:</span> <strong id="admExpScore" class="font-monospace text-warning">--</strong></div>
+          <div class="ms-3"><span class="text-muted">Engine:</span> <span id="admExpMethod" class="badge bg-secondary font-monospace" style="font-size: 10px;">SHAP</span></div>
+        </div>
+
+        <!-- Human Readable Summary Banner -->
+        <div class="alert alert-dark border border-secondary mb-3 py-2 px-3 d-flex align-items-center gap-2" style="font-size: 12px; background: rgba(30, 41, 59, 0.7);">
+          <i class="bi bi-lightbulb-fill text-warning"></i>
+          <span id="admExpSummaryText">Loading explanation breakdown...</span>
+        </div>
+
+        <!-- Chart Container -->
+        <div class="mb-4" style="background: rgba(15, 23, 42, 0.6); padding: 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05);">
+          <div class="d-flex justify-content-between align-items-center mb-2">
+            <span style="font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #94a3b8;">
+              <i class="bi bi-bar-chart-steps me-1"></i> Feature Attribution (<span class="text-danger">&larr; Attack Drivers</span> vs <span class="text-success">Benign Baseline &rarr;</span>)
+            </span>
+            <span class="text-muted" style="font-size: 11px;">Values in &Delta; Log-Odds / Attribution</span>
+          </div>
+          <div style="height: 220px; position: relative;">
+            <canvas id="admShapChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Top Features Table -->
+        <div class="table-responsive">
+          <table class="table table-dark table-sm table-hover m-0" style="font-size: 12px;">
+            <thead>
+              <tr class="text-muted border-secondary">
+                <th>Feature Name</th>
+                <th class="text-end">Raw Value</th>
+                <th class="text-end">SHAP Value (&phi;)</th>
+                <th class="text-end">Impact Share</th>
+                <th class="text-end">Direction</th>
+              </tr>
+            </thead>
+            <tbody id="admExpFeaturesTableBody">
+              <!-- populated dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer" style="border-top: 1px solid rgba(255,255,255,0.08); padding: 12px 24px;">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

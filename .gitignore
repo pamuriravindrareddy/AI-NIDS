@@ -26,3 +26,4 @@ IDS_Dataset.csv
 ai_nids_attack_logs.csv
 iot_attack_logs.csv
 scratch/
+*.bak
